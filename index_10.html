@@ -1,0 +1,1218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bear Creek Link Crew — Check-In Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy: #10203F;
+    --navy-2: #1C3466;
+    --royal: #3459E3;
+    --silver: #C9D0D9;
+    --silver-deep: #8993A2;
+    --cream: #F5F6F8;
+    --ink: #1B2230;
+    --slate: #64748B;
+    --academic: #2F7A63;
+    --social: #E8604C;
+    --general: #5B6EE8;
+    --line: #E1E4EA;
+  }
+  body{ background:var(--cream); font-family:'Inter',sans-serif; color:var(--ink); }
+  .font-display{ font-family:'Oswald',sans-serif; letter-spacing:.01em; }
+  .font-mono{ font-family:'IBM Plex Mono',monospace; }
+
+  .ticket{ position:relative; background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+  .ticket::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--stub-color, var(--general)); }
+  .ticket::after{
+    content:"";
+    position:absolute; left:2px; top:8px; bottom:8px; width:2px;
+    background-image: radial-gradient(circle, #ffffffaa 1.5px, transparent 1.5px);
+    background-size: 2px 10px;
+  }
+
+  .tab-btn{ transition: all .15s ease; }
+  .tab-active{ background:var(--navy); color:#fff; }
+  .tab-inactive{ background:transparent; color:var(--navy); }
+
+  .paw-bg{ background-image: radial-gradient(rgba(255,255,255,.05) 2px, transparent 2px); background-size: 14px 14px; }
+
+  ::-webkit-scrollbar{ height:8px; width:8px; }
+  ::-webkit-scrollbar-thumb{ background:#cbd0da; border-radius:8px; }
+
+  @keyframes pop { 0%{transform:scale(.96); opacity:0;} 100%{transform:scale(1); opacity:1;} }
+  .animate-pop{ animation: pop .18s ease-out; }
+
+  /* Group chat floating panel */
+  #chatToggle{
+    background:var(--navy); color:#fff; border-radius:9999px;
+    padding:12px 18px; font-weight:600; font-size:14px; box-shadow:0 8px 24px rgba(16,32,63,.35);
+    display:flex; align-items:center; gap:8px; cursor:pointer; border:none;
+  }
+  #chatPanel{
+    position:fixed; right:20px; bottom:84px; z-index:50;
+    width:320px; max-width:calc(100vw - 40px); max-height:60vh;
+    background:#fff; border:1px solid var(--line); border-radius:16px;
+    box-shadow:0 12px 40px rgba(16,32,63,.25);
+  }
+  .detail-row td{ background:var(--cream); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<div id="updateToast" class="hidden fixed top-3 left-1/2 -translate-x-1/2 z-[60] max-w-sm w-[92%] bg-[var(--navy)] text-white rounded-xl shadow-lg px-4 py-3 flex items-start gap-3">
+  <span class="text-lg">🎉</span>
+  <div class="flex-1">
+    <p class="font-display font-semibold text-sm">This app was just updated!</p>
+    <p id="updateToastNote" class="text-xs text-white/80 mt-0.5"></p>
+  </div>
+  <button id="updateToastClose" class="text-white/70 hover:text-white text-lg leading-none">&times;</button>
+</div>
+
+<header class="sticky top-0 z-40 bg-[var(--navy)] text-white shadow-md paw-bg">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between flex-wrap gap-3">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-[var(--silver)] flex items-center justify-center text-xl">🐻</div>
+      <div>
+        <p class="font-display font-semibold text-lg leading-tight tracking-wide">BEAR CREEK LINK CREW</p>
+        <p class="text-[10px] uppercase tracking-[0.2em] text-white/60 -mt-0.5">Stockton, CA · Go Bruins</p>
+      </div>
+    </div>
+    <nav class="flex gap-1 bg-white/10 rounded-full p-1">
+      <button id="navLeader" class="tab-btn tab-active px-4 py-1.5 rounded-full text-sm font-semibold">Leader</button>
+      <button id="navAdmin" class="tab-btn tab-inactive px-4 py-1.5 rounded-full text-sm font-semibold">Admin</button>
+    </nav>
+    <button id="navShowChat" class="hidden bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full text-xs font-semibold">💬 Show chat</button>
+  </div>
+</header>
+
+<main class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+
+  <!-- ANNOUNCEMENTS -->
+  <section id="announcementSection" class="hidden mb-6 sm:mb-8">
+    <div class="bg-white rounded-2xl border border-[var(--line)] shadow-sm p-5">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--royal)] font-display">📣 Crew Announcements</p>
+        <span class="text-[10px] text-[var(--slate)]">Posted by the teacher</span>
+      </div>
+      <div id="announcementList" class="space-y-2 max-h-48 overflow-y-auto mb-3 pr-1"></div>
+      <div id="announcePostRow" class="hidden flex flex-col sm:flex-row gap-2">
+        <input id="announceName" type="text" placeholder="Your name" class="sm:w-40 rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <input id="announceMsg" type="text" placeholder="Post an update or announcement…" class="flex-1 rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <button id="announceSubmit" class="bg-[var(--navy)] text-white text-sm font-semibold px-4 py-2 rounded-lg hover:bg-[var(--navy-2)]">Post</button>
+      </div>
+      <p id="announceLockedNote" class="text-xs text-[var(--slate)] italic">Only the teacher can post here — unlock the Admin tab to post an announcement.</p>
+    </div>
+  </section>
+
+  <!-- ============ LEADER VIEW ============ -->
+  <section id="view-leader">
+
+    <!-- LOGIN GATE (username only) -->
+    <div id="leaderLoginGate" class="max-w-sm mx-auto bg-white rounded-2xl border border-[var(--line)] shadow-sm p-7 mt-6 text-center">
+      <div class="w-11 h-11 rounded-full bg-[var(--navy)] text-white flex items-center justify-center mx-auto mb-3 text-lg">🐻</div>
+      <h2 class="font-display text-lg font-semibold text-[var(--navy)]">Leader sign-in</h2>
+      <p class="text-xs text-[var(--slate)] mt-1 mb-4">Sign in once on this device. You'll only see your own check-ins.</p>
+      <input id="loginUsername" type="text" placeholder="Username" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+      <button id="loginSubmit" class="w-full bg-[var(--navy)] text-white font-semibold py-2.5 rounded-lg text-sm mt-4">Sign In</button>
+      <p id="loginError" class="hidden text-xs text-[var(--social)] mt-2">Please enter a username.</p>
+    </div>
+
+    <!-- NAME CAPTURE (shown once, the first time a signed-in user opens the check-in form) -->
+    <div id="nameCaptureGate" class="hidden max-w-sm mx-auto bg-white rounded-2xl border border-[var(--line)] shadow-sm p-7 mt-6 text-center">
+      <div class="w-11 h-11 rounded-full bg-[var(--navy)] text-white flex items-center justify-center mx-auto mb-3 text-lg">🐻</div>
+      <h2 class="font-display text-lg font-semibold text-[var(--navy)]">Quick — what's your name?</h2>
+      <p class="text-xs text-[var(--slate)] mt-1 mb-4">This is what shows up on your check-ins. Just once — we'll remember it.</p>
+      <input id="nameCaptureName" type="text" placeholder="Your full name" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+      <button id="nameCaptureSubmit" class="w-full bg-[var(--navy)] text-white font-semibold py-2.5 rounded-lg text-sm mt-4">Continue</button>
+      <p id="nameCaptureError" class="hidden text-xs text-[var(--social)] mt-2">Please enter your name.</p>
+      <button id="nameCaptureLogoutBtn" class="text-xs text-[var(--slate)] underline mt-3">Not you? Log out</button>
+    </div>
+
+    <!-- LEADER CONTENT (shown once signed in + name captured) -->
+    <div id="leaderContent" class="hidden">
+      <div class="mb-6 flex items-start justify-between flex-wrap gap-2">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--royal)] font-display">Roster Check-In</p>
+          <h1 class="font-display text-2xl sm:text-3xl font-semibold text-[var(--navy)] mt-1">Log a freshman check-in</h1>
+          <p class="text-sm text-[var(--slate)] mt-1">Checking in as <span id="loggedInName" class="font-semibold text-[var(--navy)]"></span> · <button id="editNameBtn" class="underline text-[var(--royal)]">Edit</button> · <button id="logoutBtn" class="underline text-[var(--royal)]">Log out</button></p>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <p class="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--slate)] mb-3">Your assigned freshman</p>
+        <div id="assignedFreshmenSection" class="space-y-3"></div>
+      </div>
+
+      <div class="grid lg:grid-cols-5 gap-6">
+        <form id="checkinForm" class="lg:col-span-3 bg-white rounded-2xl border border-[var(--line)] shadow-sm p-5 sm:p-7 space-y-5">
+
+          <div>
+            <label class="flex items-center gap-2 text-sm font-semibold text-[var(--navy)] mb-1.5">
+              <span class="font-mono text-xs bg-[var(--navy)] text-white w-5 h-5 rounded flex items-center justify-center">1</span>
+              Freshman
+            </label>
+            <select id="freshmanSelect" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30 mb-2"></select>
+            <input id="freshmanOther" type="text" placeholder="Type freshman's name" class="hidden w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label class="flex items-center gap-2 text-sm font-semibold text-[var(--navy)] mb-1.5">
+                <span class="font-mono text-xs bg-[var(--navy)] text-white w-5 h-5 rounded flex items-center justify-center">2</span>
+                Check-in date
+              </label>
+              <input required id="checkinDate" type="date"
+                class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30 focus:border-[var(--navy)]">
+            </div>
+            <div>
+              <label class="flex items-center gap-2 text-sm font-semibold text-[var(--navy)] mb-1.5">
+                <span class="font-mono text-xs bg-[var(--navy)] text-white w-5 h-5 rounded flex items-center justify-center">3</span>
+                Quarter
+              </label>
+              <select id="quarter" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+                <option value="Q1">1st Quarter</option>
+                <option value="Q2">2nd Quarter</option>
+                <option value="Q3">3rd Quarter</option>
+                <option value="Q4">4th Quarter</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="flex items-center gap-2 text-sm font-semibold text-[var(--navy)] mb-1.5">
+              <span class="font-mono text-xs bg-[var(--navy)] text-white w-5 h-5 rounded flex items-center justify-center">4</span>
+              Check-in notes
+            </label>
+            <textarea id="notes" rows="4" placeholder="How are they settling in? Anything the teacher should know?"
+              class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30 focus:border-[var(--navy)] resize-none"></textarea>
+          </div>
+
+          <button type="submit"
+            class="w-full bg-[var(--navy)] hover:bg-[var(--navy-2)] text-white font-display font-semibold tracking-wide py-3 rounded-xl transition-colors">
+            Submit Check-In
+          </button>
+          <button type="button" id="cancelCheckinEditBtn" class="hidden w-full text-xs text-[var(--slate)] underline text-center">Cancel edit</button>
+          <p id="formConfirm" class="hidden text-center text-sm font-semibold text-[var(--academic)]">✓ Logged! Nice work checking in on your freshman.</p>
+        </form>
+
+        <div class="lg:col-span-2">
+          <p class="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--slate)] mb-3">Your recent submissions</p>
+          <div id="recentList" class="space-y-3 max-h-[600px] overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ADMIN VIEW ============ -->
+  <section id="view-admin" class="hidden">
+
+    <div id="adminGate" class="max-w-sm mx-auto bg-white rounded-2xl border border-[var(--line)] shadow-sm p-7 mt-10 text-center">
+      <div class="w-11 h-11 rounded-full bg-[var(--navy)] text-white flex items-center justify-center mx-auto mb-3">🔒</div>
+      <h2 class="font-display text-lg font-semibold text-[var(--navy)]">Teacher Access</h2>
+      <p class="text-xs text-[var(--slate)] mt-1 mb-4">Enter the admin PIN to view the dashboard.</p>
+      <input id="pinInput" type="password" placeholder="PIN" maxlength="30"
+        class="w-full text-center tracking-[0.2em] rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+      <button id="pinSubmit" class="w-full bg-[var(--navy)] text-white font-semibold py-2.5 rounded-lg text-sm">Unlock Dashboard</button>
+      <p id="pinError" class="hidden text-xs text-[var(--social)] mt-2">Incorrect PIN. Try again.</p>
+      <p class="text-[10px] text-[var(--slate)] mt-4 leading-relaxed">This is a basic gate for a classroom tool, not real security — anyone who views the page source can read the PIN.</p>
+    </div>
+
+    <div id="adminDashboard" class="hidden">
+      <div class="flex flex-wrap items-end justify-between gap-3 mb-4">
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--royal)] font-display">Teacher Dashboard</p>
+          <h1 class="font-display text-2xl sm:text-3xl font-semibold text-[var(--navy)] mt-1">All check-ins</h1>
+        </div>
+      </div>
+
+      <div class="flex gap-1 bg-white border border-[var(--line)] rounded-full p-1 w-fit mb-6">
+        <button id="adminSubCheckins" class="tab-btn tab-active px-4 py-1.5 rounded-full text-sm font-semibold">Check-ins</button>
+        <button id="adminSubContacts" class="tab-btn tab-inactive px-4 py-1.5 rounded-full text-sm font-semibold">Contacts</button>
+      </div>
+
+      <div id="adminCheckinsPanel">
+        <div class="flex justify-end mb-4">
+          <button id="exportBtn" class="bg-[var(--silver)] text-[var(--navy)] font-display font-semibold text-sm px-4 py-2.5 rounded-xl flex items-center gap-2 hover:brightness-95">
+            ⬇ Export CSV
+          </button>
+        </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+        <div class="ticket p-4" style="--stub-color:var(--navy)">
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--slate)] pl-2">Total check-ins</p>
+          <p id="statTotal" class="font-mono text-3xl font-semibold text-[var(--navy)] pl-2">0</p>
+        </div>
+        <div class="ticket p-4" style="--stub-color:var(--royal)">
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--slate)] pl-2">This week</p>
+          <p id="statWeek" class="font-mono text-3xl font-semibold text-[var(--navy)] pl-2">0</p>
+        </div>
+        <div class="ticket p-4" style="--stub-color:var(--academic)">
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--slate)] pl-2">Freshmen reached</p>
+          <p id="statFreshmen" class="font-mono text-3xl font-semibold text-[var(--navy)] pl-2">0</p>
+        </div>
+        <div class="ticket p-4" style="--stub-color:var(--social)">
+          <p class="text-[10px] font-semibold uppercase tracking-wider text-[var(--slate)] pl-2">Active leaders</p>
+          <p id="statLeaders" class="font-mono text-3xl font-semibold text-[var(--navy)] pl-2">0</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 mb-6" id="quarterTally"></div>
+
+      <div class="bg-white rounded-2xl border border-[var(--line)] shadow-sm p-4 mb-5 grid sm:grid-cols-4 gap-3">
+        <input id="fLeader" type="text" placeholder="Filter by leader name…" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <input id="fFreshman" type="text" placeholder="Filter by freshman name…" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <input id="fDate" type="date" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <select id="fQuarter" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+          <option value="">All quarters</option>
+          <option value="Q1">1st Quarter</option>
+          <option value="Q2">2nd Quarter</option>
+          <option value="Q3">3rd Quarter</option>
+          <option value="Q4">4th Quarter</option>
+        </select>
+      </div>
+
+      <div class="bg-white rounded-2xl border border-[var(--line)] shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-[var(--navy)] text-white text-xs uppercase tracking-wider">
+              <tr>
+                <th class="text-left font-semibold px-4 py-3">Check-in date</th>
+                <th class="text-left font-semibold px-4 py-3">Quarter</th>
+                <th class="text-left font-semibold px-4 py-3">Leader</th>
+                <th class="text-left font-semibold px-4 py-3">Freshman</th>
+                <th class="text-left font-semibold px-4 py-3">Notes</th>
+                <th class="text-left font-semibold px-4 py-3">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody" class="divide-y divide-[var(--line)]"></tbody>
+          </table>
+        </div>
+        <p id="emptyState" class="hidden text-center text-sm text-[var(--slate)] py-10">No check-ins match these filters yet.</p>
+      </div>
+      </div>
+
+      <div id="adminContactsPanel" class="hidden">
+        <p class="text-sm text-[var(--slate)] mb-4">Assign freshmen to leaders. A leader can appear more than once if they have multiple freshmen. Click a freshman's name to see their check-in history.</p>
+
+        <form id="assignForm" class="bg-white rounded-2xl border border-[var(--line)] shadow-sm p-5 sm:p-6 space-y-3 mb-6">
+          <div class="grid sm:grid-cols-3 gap-3">
+            <div>
+              <label class="text-xs font-semibold text-[var(--navy)] mb-1 block">Leader</label>
+              <select id="aLeaderSelect" class="w-full rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30"></select>
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-[var(--navy)] mb-1 block">Freshman name</label>
+              <input required id="aFreshman" type="text" placeholder="Freshman name" class="w-full rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+            </div>
+            <div>
+              <label class="text-xs font-semibold text-[var(--navy)] mb-1 block">2nd Period Class</label>
+              <input required id="aClassNumber" type="text" placeholder="e.g. Mr. Diaz — Rm 204" class="w-full rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+            </div>
+          </div>
+
+          <div id="aLeaderNewWrap" class="hidden grid sm:grid-cols-2 gap-3 bg-[var(--cream)] rounded-lg p-3">
+            <input id="aLeaderNewName" type="text" placeholder="New leader's full name" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+            <select id="aLeaderNewClass" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+              <option value="Junior">Junior</option>
+              <option value="Senior">Senior</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold text-[var(--navy)] mb-1 block">Freshman's email</label>
+            <input id="aEmail" type="email" placeholder="example@lodiusd.org" class="w-full sm:w-1/3 rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+          </div>
+
+          <div class="flex items-center gap-3">
+            <button type="submit" id="assignSubmitBtn" class="bg-[var(--navy)] text-white font-semibold text-sm rounded-lg px-5 py-2.5 hover:bg-[var(--navy-2)]">Assign</button>
+            <button type="button" id="assignCancelBtn" class="hidden text-xs text-[var(--slate)] underline">Cancel edit</button>
+          </div>
+          <input type="hidden" id="aEditingId" value="">
+        </form>
+
+        <div class="bg-white rounded-2xl border border-[var(--line)] shadow-sm overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-[var(--navy)] text-white text-xs uppercase tracking-wider">
+                <tr>
+                  <th class="text-left font-semibold px-4 py-3">Leader</th>
+                  <th class="text-left font-semibold px-4 py-3">Assigned freshman</th>
+                  <th class="text-left font-semibold px-4 py-3">2nd Period Class</th>
+                  <th class="text-left font-semibold px-4 py-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="assignTableBody" class="divide-y divide-[var(--line)]"></tbody>
+            </table>
+          </div>
+          <p id="assignEmptyState" class="hidden text-center text-sm text-[var(--slate)] py-10">No assignments yet. Add one above.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ GROUP CHAT (floating, site-wide) ============ -->
+<div id="chatWidgetWrap" class="fixed right-5 bottom-5 z-50 flex items-center gap-2">
+  <button id="chatToggle">💬 Crew Chat</button>
+  <button id="chatHide" title="Hide chat" class="bg-white text-[var(--navy)] border border-[var(--line)] rounded-full w-9 h-9 flex items-center justify-center text-sm shadow-md">✕</button>
+</div>
+<div id="chatPanel" class="hidden flex flex-col overflow-hidden">
+  <div class="bg-[var(--navy)] text-white px-4 py-3 flex items-center justify-between">
+    <p class="font-display font-semibold text-sm">Leader Group Chat</p>
+    <button id="chatClose" class="text-white/70 hover:text-white text-lg leading-none">&times;</button>
+  </div>
+  <div id="chatMessages" class="flex-1 overflow-y-auto p-3 space-y-2 text-sm"></div>
+  <div class="p-3 border-t border-[var(--line)]">
+    <p id="chatLockedNote" class="hidden text-xs text-[var(--slate)] italic mb-1">Sign in as a leader (or unlock Admin) to join the chat.</p>
+    <div id="chatInputRow" class="hidden flex flex-col gap-2">
+      <input id="chatName" type="text" placeholder="Your name" class="rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+      <div class="flex gap-2">
+        <input id="chatMsg" type="text" placeholder="Say something…" class="flex-1 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+        <button id="chatSend" class="bg-[var(--navy)] text-white text-sm font-semibold px-3 rounded-lg">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   STORAGE KEYS
+   ========================================================================= */
+/* Bump APP_VERSION (and update APP_UPDATE_NOTE) every time you ship changes.
+   Returning visitors on this same page/link will see a one-time "updated!" toast. */
+const APP_VERSION = "2026-07-08.1";
+const APP_UPDATE_NOTE = "Check-ins can now be edited or deleted, on both the leader and teacher side.";
+const LAST_SEEN_VERSION_KEY = "linkcrew_last_seen_version";
+
+const CHECKINS_KEY = "linkcrew_checkins";
+const ANNOUNCEMENTS_KEY = "linkcrew_announcements";
+const ASSIGNMENTS_KEY = "linkcrew_assignments";
+const LEADERS_KEY = "linkcrew_leaders";       // registry: [{fullName, leaderClass}]
+const IDENTITY_KEY = "linkcrew_identity";     // this device's signed-in leader
+const CHAT_KEY = "linkcrew_groupchat";
+const ADMIN_NAME_KEY = "linkcrew_admin_name";
+const ADMIN_PIN = "link crew"; // <-- change this to update the teacher PIN
+
+function getCheckins(){ return JSON.parse(localStorage.getItem(CHECKINS_KEY) || "[]"); }
+function saveCheckin(entry){ const all = getCheckins(); all.unshift(entry); localStorage.setItem(CHECKINS_KEY, JSON.stringify(all)); }
+function saveAllCheckins(list){ localStorage.setItem(CHECKINS_KEY, JSON.stringify(list)); }
+
+function getAnnouncements(){ return JSON.parse(localStorage.getItem(ANNOUNCEMENTS_KEY) || "[]"); }
+function saveAnnouncements(list){ localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(list)); }
+
+function getAssignments(){ return JSON.parse(localStorage.getItem(ASSIGNMENTS_KEY) || "[]"); }
+function saveAssignments(list){ localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(list)); }
+
+function getLeaders(){ return JSON.parse(localStorage.getItem(LEADERS_KEY) || "[]"); }
+function saveLeaders(list){ localStorage.setItem(LEADERS_KEY, JSON.stringify(list)); }
+function registerLeader(fullName, leaderClass){
+  const list = getLeaders();
+  const key = fullName.trim().toLowerCase();
+  if(!list.some(l => l.fullName.trim().toLowerCase() === key)){
+    list.push({ fullName: fullName.trim(), leaderClass });
+    saveLeaders(list);
+  }
+}
+
+function getIdentity(){ return JSON.parse(localStorage.getItem(IDENTITY_KEY) || "null"); }
+function saveIdentity(identity){ localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity)); }
+function clearIdentity(){ localStorage.removeItem(IDENTITY_KEY); }
+
+function getChat(){ return JSON.parse(localStorage.getItem(CHAT_KEY) || "[]"); }
+function saveChat(list){ localStorage.setItem(CHAT_KEY, JSON.stringify(list)); }
+
+function escapeHTML(str){ const div = document.createElement("div"); div.textContent = str ?? ""; return div.innerHTML; }
+
+const quarterLabels = { Q1:"1st Quarter", Q2:"2nd Quarter", Q3:"3rd Quarter", Q4:"4th Quarter" };
+const quarterColors = { Q1:"var(--navy)", Q2:"var(--royal)", Q3:"var(--academic)", Q4:"var(--social)" };
+
+let adminUnlocked = false;
+let adminEditingCheckinId = null;
+let identity = getIdentity();
+
+/* =========================================================================
+   NAV
+   ========================================================================= */
+const navLeader = document.getElementById("navLeader");
+const navAdmin = document.getElementById("navAdmin");
+const viewLeader = document.getElementById("view-leader");
+const viewAdmin = document.getElementById("view-admin");
+
+function setActiveTab(active){
+  [navLeader, navAdmin].forEach(btn => {
+    btn.className = btn === active
+      ? "tab-btn tab-active px-4 py-1.5 rounded-full text-sm font-semibold"
+      : "tab-btn tab-inactive px-4 py-1.5 rounded-full text-sm font-semibold";
+  });
+}
+
+navLeader.onclick = () => {
+  setActiveTab(navLeader);
+  viewLeader.classList.remove("hidden"); viewAdmin.classList.add("hidden");
+};
+navAdmin.onclick = () => {
+  setActiveTab(navAdmin);
+  viewAdmin.classList.remove("hidden"); viewLeader.classList.add("hidden");
+  if(adminUnlocked){
+    document.getElementById("adminGate").classList.add("hidden");
+    document.getElementById("adminDashboard").classList.remove("hidden");
+    renderAdmin();
+  }
+};
+
+const adminSubCheckins = document.getElementById("adminSubCheckins");
+const adminSubContacts = document.getElementById("adminSubContacts");
+adminSubCheckins.onclick = () => {
+  adminSubCheckins.className = "tab-btn tab-active px-4 py-1.5 rounded-full text-sm font-semibold";
+  adminSubContacts.className = "tab-btn tab-inactive px-4 py-1.5 rounded-full text-sm font-semibold";
+  document.getElementById("adminCheckinsPanel").classList.remove("hidden");
+  document.getElementById("adminContactsPanel").classList.add("hidden");
+};
+adminSubContacts.onclick = () => {
+  adminSubContacts.className = "tab-btn tab-active px-4 py-1.5 rounded-full text-sm font-semibold";
+  adminSubCheckins.className = "tab-btn tab-inactive px-4 py-1.5 rounded-full text-sm font-semibold";
+  document.getElementById("adminContactsPanel").classList.remove("hidden");
+  document.getElementById("adminCheckinsPanel").classList.add("hidden");
+  renderAssignments();
+};
+
+/* =========================================================================
+   ADMIN PIN GATE
+   ========================================================================= */
+function unlockEverything(){
+  adminUnlocked = true;
+  document.getElementById("adminGate").classList.add("hidden");
+  document.getElementById("adminDashboard").classList.remove("hidden");
+  document.getElementById("announcePostRow").classList.remove("hidden");
+  document.getElementById("announceLockedNote").classList.add("hidden");
+  const savedAdminName = localStorage.getItem(ADMIN_NAME_KEY);
+  if(savedAdminName) document.getElementById("announceName").value = savedAdminName;
+  renderAdmin();
+  renderAssignments();
+  populateLeaderSelect();
+  renderAnnouncements();
+  refreshAnnouncementVisibility();
+  refreshChatAccess();
+}
+
+document.getElementById("pinSubmit").addEventListener("click", () => {
+  if(document.getElementById("pinInput").value === ADMIN_PIN){ unlockEverything(); }
+  else { document.getElementById("pinError").classList.remove("hidden"); }
+});
+document.getElementById("pinInput").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("pinSubmit").click(); });
+
+/* =========================================================================
+   LEADER LOGIN
+   ========================================================================= */
+function refreshAnnouncementVisibility(){
+  const shouldShow = !!identity || adminUnlocked;
+  document.getElementById("announcementSection").classList.toggle("hidden", !shouldShow);
+}
+
+function applyIdentityUI(){
+  const loginGate = document.getElementById("leaderLoginGate");
+  const nameGate = document.getElementById("nameCaptureGate");
+  const content = document.getElementById("leaderContent");
+
+  if(!identity){
+    loginGate.classList.remove("hidden");
+    nameGate.classList.add("hidden");
+    content.classList.add("hidden");
+  } else if(!identity.fullName){
+    // signed in with a username, but hasn't given their name yet
+    loginGate.classList.add("hidden");
+    nameGate.classList.remove("hidden");
+    content.classList.add("hidden");
+  } else {
+    loginGate.classList.add("hidden");
+    nameGate.classList.add("hidden");
+    content.classList.remove("hidden");
+    document.getElementById("loggedInName").textContent = identity.fullName;
+    populateFreshmanSelect();
+    renderRecent();
+    renderAssignedFreshmen();
+  }
+  refreshAnnouncementVisibility();
+  refreshChatAccess();
+}
+
+document.getElementById("loginSubmit").addEventListener("click", () => {
+  const username = document.getElementById("loginUsername").value.trim();
+  if(!username){ document.getElementById("loginError").classList.remove("hidden"); return; }
+  document.getElementById("loginError").classList.add("hidden");
+  identity = { username };
+  saveIdentity(identity);
+  applyIdentityUI();
+});
+document.getElementById("loginUsername").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("loginSubmit").click(); });
+
+document.getElementById("nameCaptureSubmit").addEventListener("click", () => {
+  const fullName = document.getElementById("nameCaptureName").value.trim();
+  if(!fullName){ document.getElementById("nameCaptureError").classList.remove("hidden"); return; }
+  document.getElementById("nameCaptureError").classList.add("hidden");
+  identity = { ...identity, fullName };
+  saveIdentity(identity);
+  registerLeader(identity.fullName);
+  populateLeaderSelect();
+  applyIdentityUI();
+});
+document.getElementById("nameCaptureName").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("nameCaptureSubmit").click(); });
+
+document.getElementById("editNameBtn").addEventListener("click", () => {
+  document.getElementById("nameCaptureName").value = identity.fullName || "";
+  identity = { username: identity.username }; // temporarily clear name so the gate shows
+  applyIdentityUI();
+});
+
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  clearIdentity();
+  identity = null;
+  document.getElementById("loginUsername").value = "";
+  applyIdentityUI();
+});
+
+document.getElementById("nameCaptureLogoutBtn").addEventListener("click", () => {
+  clearIdentity();
+  identity = null;
+  document.getElementById("loginUsername").value = "";
+  applyIdentityUI();
+});
+
+/* =========================================================================
+   ANNOUNCEMENTS (admin-only posting)
+   ========================================================================= */
+function renderAnnouncements(){
+  const list = getAnnouncements();
+  const el = document.getElementById("announcementList");
+  if(list.length === 0){
+    el.innerHTML = `<p class="text-sm text-[var(--slate)] text-center py-3">No announcements yet.</p>`;
+    return;
+  }
+  el.innerHTML = list.map(a => {
+    const d = new Date(a.date);
+    const dateStr = d.toLocaleDateString(undefined, { month:"short", day:"numeric" }) + " · " + d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+    const deleteBtn = adminUnlocked ? `<button data-id="${a.id}" class="deleteAnnouncement text-[var(--slate)] hover:text-[var(--social)] text-xs ml-2">✕</button>` : "";
+    return `
+      <div class="flex items-start justify-between gap-2 border-b border-[var(--line)] last:border-0 pb-2">
+        <div>
+          <p class="text-sm"><span class="font-semibold text-[var(--navy)]">${escapeHTML(a.name)}:</span> ${escapeHTML(a.message)}</p>
+          <p class="font-mono text-[10px] text-[var(--slate)] mt-0.5">${dateStr}</p>
+        </div>
+        ${deleteBtn}
+      </div>`;
+  }).join("");
+
+  document.querySelectorAll(".deleteAnnouncement").forEach(btn => {
+    btn.addEventListener("click", () => {
+      saveAnnouncements(getAnnouncements().filter(a => a.id !== btn.dataset.id));
+      renderAnnouncements();
+    });
+  });
+}
+
+document.getElementById("announceSubmit").addEventListener("click", () => {
+  const name = document.getElementById("announceName").value.trim();
+  const message = document.getElementById("announceMsg").value.trim();
+  if(!name || !message || !adminUnlocked) return;
+  localStorage.setItem(ADMIN_NAME_KEY, name);
+  const list = getAnnouncements();
+  list.unshift({ id: crypto.randomUUID(), name, message, date: new Date().toISOString() });
+  saveAnnouncements(list);
+  document.getElementById("announceMsg").value = "";
+  renderAnnouncements();
+});
+document.getElementById("announceMsg").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("announceSubmit").click(); });
+
+/* =========================================================================
+   FRESHMAN SELECT (populated from this leader's assignments)
+   ========================================================================= */
+function populateFreshmanSelect(){
+  if(!identity) return;
+  const sel = document.getElementById("freshmanSelect");
+  const mine = getAssignments().filter(a => a.leader.trim().toLowerCase() === identity.fullName.trim().toLowerCase());
+  const options = mine.map(a => `<option value="${escapeHTML(a.freshman)}">${escapeHTML(a.freshman)}</option>`).join("");
+  sel.innerHTML = options + `<option value="__other__">Someone else / not listed</option>`;
+  sel.value = mine.length ? mine[0].freshman : "__other__";
+  toggleFreshmanOther();
+}
+
+function toggleFreshmanOther(){
+  const sel = document.getElementById("freshmanSelect");
+  const other = document.getElementById("freshmanOther");
+  if(sel.value === "__other__"){ other.classList.remove("hidden"); other.required = true; }
+  else { other.classList.add("hidden"); other.required = false; other.value = ""; }
+}
+document.getElementById("freshmanSelect").addEventListener("change", toggleFreshmanOther);
+
+/* =========================================================================
+   CHECK-IN FORM
+   ========================================================================= */
+document.getElementById("checkinDate").value = new Date().toISOString().slice(0,10);
+
+let checkinEditingId = null;
+
+document.getElementById("checkinForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if(!identity) return;
+  const sel = document.getElementById("freshmanSelect");
+  const freshman = sel.value === "__other__" ? document.getElementById("freshmanOther").value.trim() : sel.value;
+  if(!freshman) return;
+
+  const fields = {
+    freshman,
+    checkinDate: document.getElementById("checkinDate").value,
+    quarter: document.getElementById("quarter").value,
+    notes: document.getElementById("notes").value.trim()
+  };
+
+  if(checkinEditingId){
+    const list = getCheckins().map(c => c.id === checkinEditingId ? { ...c, ...fields } : c);
+    saveAllCheckins(list);
+    cancelCheckinEdit();
+  } else {
+    saveCheckin({
+      id: crypto.randomUUID(),
+      leader: identity.fullName,
+      leaderClass: identity.leaderClass,
+      ...fields,
+      date: new Date().toISOString()
+    });
+    document.getElementById("notes").value = "";
+    document.getElementById("checkinDate").value = new Date().toISOString().slice(0,10);
+  }
+
+  const confirm = document.getElementById("formConfirm");
+  confirm.textContent = checkinEditingId ? "✓ Check-in updated!" : "✓ Logged! Nice work checking in on your freshman.";
+  confirm.classList.remove("hidden");
+  setTimeout(() => confirm.classList.add("hidden"), 2500);
+
+  renderRecent();
+});
+
+function startCheckinEdit(id){
+  const entry = getCheckins().find(c => c.id === id);
+  if(!entry) return;
+  checkinEditingId = id;
+
+  const sel = document.getElementById("freshmanSelect");
+  const hasOption = [...sel.options].some(o => o.value === entry.freshman);
+  if(hasOption){ sel.value = entry.freshman; }
+  else { sel.value = "__other__"; }
+  toggleFreshmanOther();
+  if(!hasOption) document.getElementById("freshmanOther").value = entry.freshman;
+
+  document.getElementById("checkinDate").value = entry.checkinDate || new Date().toISOString().slice(0,10);
+  document.getElementById("quarter").value = entry.quarter || "Q1";
+  document.getElementById("notes").value = entry.notes || "";
+
+  document.querySelector("#checkinForm button[type=submit]").textContent = "Update Check-In";
+  document.getElementById("cancelCheckinEditBtn").classList.remove("hidden");
+  document.getElementById("checkinForm").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+
+function cancelCheckinEdit(){
+  checkinEditingId = null;
+  document.getElementById("checkinForm").reset();
+  document.getElementById("checkinDate").value = new Date().toISOString().slice(0,10);
+  populateFreshmanSelect();
+  document.querySelector("#checkinForm button[type=submit]").textContent = "Submit Check-In";
+  document.getElementById("cancelCheckinEditBtn").classList.add("hidden");
+}
+document.getElementById("cancelCheckinEditBtn").addEventListener("click", cancelCheckinEdit);
+
+function renderRecent(){
+  if(!identity) return;
+  const list = document.getElementById("recentList");
+  const mine = getCheckins().filter(c => c.leader.trim().toLowerCase() === identity.fullName.trim().toLowerCase());
+  if(mine.length === 0){
+    list.innerHTML = `<div class="text-sm text-[var(--slate)] bg-white rounded-xl border border-dashed border-[var(--line)] p-6 text-center">No check-ins logged yet. Submit your first one! 👋</div>`;
+    return;
+  }
+  list.innerHTML = mine.slice(0, 20).map(ticketHTML).join("");
+
+  document.querySelectorAll(".editCheckinBtn").forEach(btn => {
+    btn.addEventListener("click", () => startCheckinEdit(btn.dataset.id));
+  });
+  document.querySelectorAll(".deleteCheckinBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if(!confirm("Delete this check-in?")) return;
+      saveAllCheckins(getCheckins().filter(c => c.id !== btn.dataset.id));
+      if(checkinEditingId === btn.dataset.id) cancelCheckinEdit();
+      renderRecent();
+    });
+  });
+}
+
+function ticketHTML(c){
+  const color = quarterColors[c.quarter] || "var(--general)";
+  const logged = new Date(c.date);
+  const loggedStr = logged.toLocaleDateString(undefined, { month:"short", day:"numeric" }) + " · " + logged.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+  const checkinDateStr = c.checkinDate ? new Date(c.checkinDate + "T00:00:00").toLocaleDateString(undefined, { month:"short", day:"numeric", year:"numeric" }) : "—";
+  return `
+    <div class="ticket animate-pop pl-4 pr-4 py-3" style="--stub-color:${color}">
+      <div class="flex items-center justify-between">
+        <p class="font-semibold text-sm text-[var(--navy)]">${escapeHTML(c.freshman)}</p>
+        <span class="font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full" style="background:color-mix(in srgb, ${color} 15%, white); color:${color}">${quarterLabels[c.quarter] || c.quarter}</span>
+      </div>
+      <p class="text-xs text-[var(--slate)] mt-0.5">Check-in: ${checkinDateStr}</p>
+      ${c.notes ? `<p class="text-xs text-[var(--ink)]/80 mt-1.5">${escapeHTML(c.notes)}</p>` : ""}
+      <div class="flex items-center justify-between mt-2">
+        <p class="font-mono text-[10px] text-[var(--slate)]">Logged ${loggedStr}</p>
+        <div class="flex gap-2">
+          <button data-id="${c.id}" class="editCheckinBtn text-[10px] font-semibold text-[var(--royal)]">Edit</button>
+          <button data-id="${c.id}" class="deleteCheckinBtn text-[10px] font-semibold text-[var(--social)]">Delete</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* =========================================================================
+   ADMIN DASHBOARD
+   ========================================================================= */
+["fLeader","fFreshman","fDate","fQuarter"].forEach(id => {
+  document.getElementById(id).addEventListener("input", renderAdmin);
+});
+
+function getFilteredData(){
+  const leaderQ = document.getElementById("fLeader").value.trim().toLowerCase();
+  const freshmanQ = document.getElementById("fFreshman").value.trim().toLowerCase();
+  const dateQ = document.getElementById("fDate").value;
+  const quarterQ = document.getElementById("fQuarter").value;
+  return getCheckins().filter(c => {
+    if(leaderQ && !c.leader.toLowerCase().includes(leaderQ)) return false;
+    if(freshmanQ && !c.freshman.toLowerCase().includes(freshmanQ)) return false;
+    if(quarterQ && c.quarter !== quarterQ) return false;
+    if(dateQ && c.checkinDate !== dateQ) return false;
+    return true;
+  });
+}
+
+function renderAdmin(){
+  const all = getCheckins();
+  const filtered = getFilteredData();
+
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7*24*60*60*1000);
+  const thisWeek = all.filter(c => new Date(c.date) >= weekAgo);
+  const uniqueFreshmen = new Set(all.map(c => c.freshman.toLowerCase()));
+  const uniqueLeaders = new Set(all.map(c => c.leader.toLowerCase()));
+
+  document.getElementById("statTotal").textContent = all.length;
+  document.getElementById("statWeek").textContent = thisWeek.length;
+  document.getElementById("statFreshmen").textContent = uniqueFreshmen.size;
+  document.getElementById("statLeaders").textContent = uniqueLeaders.size;
+
+  const tallyEl = document.getElementById("quarterTally");
+  tallyEl.innerHTML = ["Q1","Q2","Q3","Q4"].map(q => {
+    const count = all.filter(c => c.quarter === q).length;
+    return `<span class="font-mono text-xs px-3 py-1.5 rounded-full" style="background:color-mix(in srgb, ${quarterColors[q]} 12%, white); color:${quarterColors[q]}">${quarterLabels[q]}: ${count}</span>`;
+  }).join("");
+
+  const tbody = document.getElementById("adminTableBody");
+  const emptyState = document.getElementById("emptyState");
+  if(filtered.length === 0){ tbody.innerHTML = ""; emptyState.classList.remove("hidden"); return; }
+  emptyState.classList.add("hidden");
+
+  tbody.innerHTML = filtered.map(c => {
+    if(adminEditingCheckinId === c.id) return adminEditRowHTML(c);
+    const color = quarterColors[c.quarter] || "var(--general)";
+    const checkinDateStr = c.checkinDate ? new Date(c.checkinDate + "T00:00:00").toLocaleDateString() : "—";
+    const logged = new Date(c.date);
+    return `
+      <tr class="hover:bg-[var(--cream)]">
+        <td class="px-4 py-3 whitespace-nowrap">
+          <p class="font-medium">${checkinDateStr}</p>
+          <p class="font-mono text-[10px] text-[var(--slate)]">logged ${logged.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})}</p>
+        </td>
+        <td class="px-4 py-3"><span class="font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full" style="background:color-mix(in srgb, ${color} 15%, white); color:${color}">${quarterLabels[c.quarter] || c.quarter}</span></td>
+        <td class="px-4 py-3 font-medium">${escapeHTML(c.leader)} <span class="text-[var(--slate)] font-normal">(${escapeHTML(c.leaderClass||"—")})</span></td>
+        <td class="px-4 py-3 font-medium">${escapeHTML(c.freshman)}</td>
+        <td class="px-4 py-3 text-[var(--slate)] max-w-xs truncate" title="${escapeHTML(c.notes)}">${escapeHTML(c.notes) || "—"}</td>
+        <td class="px-4 py-3 whitespace-nowrap">
+          <button data-id="${c.id}" class="adminEditCheckinBtn text-[var(--royal)] text-xs font-semibold mr-3">Edit</button>
+          <button data-id="${c.id}" class="adminDeleteCheckinBtn text-[var(--social)] text-xs font-semibold">Delete</button>
+        </td>
+      </tr>`;
+  }).join("");
+
+  document.querySelectorAll(".adminEditCheckinBtn").forEach(btn => {
+    btn.addEventListener("click", () => { adminEditingCheckinId = btn.dataset.id; renderAdmin(); });
+  });
+  document.querySelectorAll(".adminDeleteCheckinBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if(!confirm("Delete this check-in?")) return;
+      saveAllCheckins(getCheckins().filter(c => c.id !== btn.dataset.id));
+      renderAdmin();
+    });
+  });
+}
+
+function adminEditRowHTML(c){
+  return `
+    <tr class="bg-[var(--cream)]">
+      <td class="px-4 py-3">
+        <input type="date" id="adminEditDate" value="${c.checkinDate||""}" class="rounded-lg border border-[var(--line)] px-2 py-1.5 text-xs w-full">
+      </td>
+      <td class="px-4 py-3">
+        <select id="adminEditQuarter" class="rounded-lg border border-[var(--line)] px-2 py-1.5 text-xs w-full">
+          ${["Q1","Q2","Q3","Q4"].map(q => `<option value="${q}" ${c.quarter===q?"selected":""}>${quarterLabels[q]}</option>`).join("")}
+        </select>
+      </td>
+      <td class="px-4 py-3">
+        <input type="text" id="adminEditLeader" value="${escapeHTML(c.leader)}" class="rounded-lg border border-[var(--line)] px-2 py-1.5 text-xs w-full">
+      </td>
+      <td class="px-4 py-3">
+        <input type="text" id="adminEditFreshman" value="${escapeHTML(c.freshman)}" class="rounded-lg border border-[var(--line)] px-2 py-1.5 text-xs w-full">
+      </td>
+      <td class="px-4 py-3">
+        <input type="text" id="adminEditNotes" value="${escapeHTML(c.notes)}" class="rounded-lg border border-[var(--line)] px-2 py-1.5 text-xs w-full">
+      </td>
+      <td class="px-4 py-3 whitespace-nowrap">
+        <button id="adminSaveCheckinBtn" data-id="${c.id}" class="text-[var(--academic)] text-xs font-semibold mr-3">Save</button>
+        <button id="adminCancelCheckinBtn" class="text-[var(--slate)] text-xs font-semibold">Cancel</button>
+      </td>
+    </tr>`;
+}
+
+document.getElementById("adminTableBody").addEventListener("click", (e) => {
+  if(e.target.id === "adminSaveCheckinBtn"){
+    const id = e.target.dataset.id;
+    const list = getCheckins().map(c => c.id === id ? {
+      ...c,
+      checkinDate: document.getElementById("adminEditDate").value,
+      quarter: document.getElementById("adminEditQuarter").value,
+      leader: document.getElementById("adminEditLeader").value.trim(),
+      freshman: document.getElementById("adminEditFreshman").value.trim(),
+      notes: document.getElementById("adminEditNotes").value.trim()
+    } : c);
+    saveAllCheckins(list);
+    adminEditingCheckinId = null;
+    renderAdmin();
+  }
+  if(e.target.id === "adminCancelCheckinBtn"){
+    adminEditingCheckinId = null;
+    renderAdmin();
+  }
+});
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const data = getFilteredData();
+  if(data.length === 0){ alert("No check-ins to export with the current filters."); return; }
+  const headers = ["Check-in Date","Quarter","Leader","Leader Class","Freshman","Notes","Logged At"];
+  const rows = data.map(c => {
+    const logged = new Date(c.date);
+    return [c.checkinDate||"", quarterLabels[c.quarter]||c.quarter, c.leader, c.leaderClass||"", c.freshman, c.notes, logged.toLocaleString()].map(csvEscape).join(",");
+  });
+  const csv = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `bear-creek-link-crew-checkins-${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  URL.revokeObjectURL(url);
+});
+
+function csvEscape(val){
+  const str = String(val ?? "");
+  if(str.includes(",") || str.includes('"') || str.includes("\n")) return `"${str.replace(/"/g,'""')}"`;
+  return str;
+}
+
+/* =========================================================================
+   CONTACTS — LEADER SELECT + ASSIGNMENTS
+   ========================================================================= */
+function populateLeaderSelect(){
+  const sel = document.getElementById("aLeaderSelect");
+  const current = sel.value;
+  const leaders = getLeaders();
+  sel.innerHTML = leaders.map(l => `<option value="${escapeHTML(l.fullName)}">${escapeHTML(l.fullName)}${l.leaderClass ? ` (${l.leaderClass})` : ""}</option>`).join("")
+    + `<option value="__new__">+ Add a new leader…</option>`;
+  if(leaders.some(l => l.fullName === current)) sel.value = current;
+}
+
+document.getElementById("aLeaderSelect").addEventListener("change", (e) => {
+  document.getElementById("aLeaderNewWrap").classList.toggle("hidden", e.target.value !== "__new__");
+});
+
+document.getElementById("assignForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  let leader = document.getElementById("aLeaderSelect").value;
+  if(leader === "__new__"){
+    const newName = document.getElementById("aLeaderNewName").value.trim();
+    const newClass = document.getElementById("aLeaderNewClass").value;
+    if(!newName) return;
+    registerLeader(newName, newClass);
+    leader = newName;
+    populateLeaderSelect();
+  }
+  const freshman = document.getElementById("aFreshman").value.trim();
+  const classNumber = document.getElementById("aClassNumber").value.trim();
+  const email = document.getElementById("aEmail").value.trim();
+  const editingId = document.getElementById("aEditingId").value;
+
+  let list = getAssignments();
+  if(editingId){
+    // preserve any struggles/favoriteSubject the leader has already filled in
+    list = list.map(a => a.id === editingId ? { ...a, leader, freshman, classNumber, email } : a);
+  } else {
+    list.unshift({ id: crypto.randomUUID(), leader, freshman, classNumber, email, struggles: "", favoriteSubject: "" });
+  }
+  saveAssignments(list);
+  resetAssignForm();
+  renderAssignments();
+  populateFreshmanSelect();
+  renderAssignedFreshmen();
+});
+
+document.getElementById("assignCancelBtn").addEventListener("click", resetAssignForm);
+
+function resetAssignForm(){
+  document.getElementById("assignForm").reset();
+  document.getElementById("aEditingId").value = "";
+  document.getElementById("assignSubmitBtn").textContent = "Assign";
+  document.getElementById("assignCancelBtn").classList.add("hidden");
+  document.getElementById("aLeaderNewWrap").classList.add("hidden");
+  populateLeaderSelect();
+}
+
+function renderAssignments(){
+  const list = getAssignments();
+  const tbody = document.getElementById("assignTableBody");
+  const emptyState = document.getElementById("assignEmptyState");
+  if(list.length === 0){ tbody.innerHTML = ""; emptyState.classList.remove("hidden"); return; }
+  emptyState.classList.add("hidden");
+
+  tbody.innerHTML = list.map(a => {
+    const history = getCheckins()
+      .filter(c => c.freshman.trim().toLowerCase() === a.freshman.trim().toLowerCase())
+      .sort((x,y) => new Date(y.date) - new Date(x.date));
+
+    const historyHTML = history.length === 0
+      ? `<p class="text-xs text-[var(--slate)]">No check-ins logged for this freshman yet.</p>`
+      : history.map(c => `
+          <div class="border-b border-[var(--line)] last:border-0 py-2">
+            <p class="text-xs font-semibold text-[var(--navy)]">${new Date(c.checkinDate+"T00:00:00").toLocaleDateString()} · ${quarterLabels[c.quarter]||c.quarter} · by ${escapeHTML(c.leader)}</p>
+            <p class="text-xs text-[var(--slate)] mt-0.5">${escapeHTML(c.notes) || "No notes."}</p>
+          </div>`).join("");
+
+    return `
+      <tr class="hover:bg-[var(--cream)]">
+        <td class="px-4 py-3 font-medium">${escapeHTML(a.leader)}</td>
+        <td class="px-4 py-3">
+          <button data-id="${a.id}" class="toggleDetail font-semibold text-[var(--royal)] underline">${escapeHTML(a.freshman)}</button>
+        </td>
+        <td class="px-4 py-3 font-mono text-xs">${escapeHTML(a.classNumber)}</td>
+        <td class="px-4 py-3">
+          <button data-id="${a.id}" class="editAssignment text-[var(--royal)] text-xs font-semibold mr-3">Edit</button>
+          <button data-id="${a.id}" class="deleteAssignment text-[var(--social)] text-xs font-semibold">Delete</button>
+        </td>
+      </tr>
+      <tr class="detail-row hidden" id="detail-${a.id}">
+        <td colspan="4" class="px-4 py-3">
+          <div class="grid sm:grid-cols-3 gap-3 mb-3 text-xs">
+            <p><span class="font-semibold text-[var(--navy)]">Email:</span> ${escapeHTML(a.email) || "—"}</p>
+            <p><span class="font-semibold text-[var(--navy)]">Struggles with:</span> ${escapeHTML(a.struggles) || "—"}</p>
+            <p><span class="font-semibold text-[var(--navy)]">Favorite subject:</span> ${escapeHTML(a.favoriteSubject) || "—"}</p>
+          </div>
+          <p class="text-xs font-semibold uppercase tracking-wider text-[var(--slate)] mb-1">Check-in history</p>
+          ${historyHTML}
+        </td>
+      </tr>`;
+  }).join("");
+
+  document.querySelectorAll(".toggleDetail").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.getElementById(`detail-${btn.dataset.id}`).classList.toggle("hidden");
+    });
+  });
+  document.querySelectorAll(".editAssignment").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const a = getAssignments().find(x => x.id === btn.dataset.id);
+      if(!a) return;
+      populateLeaderSelect();
+      document.getElementById("aLeaderSelect").value = a.leader;
+      document.getElementById("aFreshman").value = a.freshman;
+      document.getElementById("aClassNumber").value = a.classNumber;
+      document.getElementById("aEmail").value = a.email || "";
+      document.getElementById("aEditingId").value = a.id;
+      document.getElementById("assignSubmitBtn").textContent = "Update";
+      document.getElementById("assignCancelBtn").classList.remove("hidden");
+      window.scrollTo({ top: document.getElementById("assignForm").offsetTop - 20, behavior:"smooth" });
+    });
+  });
+  document.querySelectorAll(".deleteAssignment").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if(!confirm("Remove this assignment?")) return;
+      saveAssignments(getAssignments().filter(a => a.id !== btn.dataset.id));
+      renderAssignments();
+      populateFreshmanSelect();
+      renderAssignedFreshmen();
+    });
+  });
+}
+
+/* =========================================================================
+   LEADER — ASSIGNED FRESHMAN CARDS (leader fills in struggles/favorite subject)
+   ========================================================================= */
+function renderAssignedFreshmen(){
+  if(!identity || !identity.fullName) return;
+  const el = document.getElementById("assignedFreshmenSection");
+  const mine = getAssignments().filter(a => a.leader.trim().toLowerCase() === identity.fullName.trim().toLowerCase());
+
+  if(mine.length === 0){
+    el.innerHTML = `<div class="text-sm text-[var(--slate)] bg-white rounded-xl border border-dashed border-[var(--line)] p-4 text-center">No freshman assigned to you yet — check with your teacher.</div>`;
+    return;
+  }
+
+  el.innerHTML = mine.map(a => `
+    <div class="ticket p-4" style="--stub-color:var(--royal)">
+      <div class="flex items-center justify-between flex-wrap gap-1">
+        <p class="font-display font-semibold text-[var(--navy)]">${escapeHTML(a.freshman)}</p>
+        <span class="text-xs text-[var(--slate)]">${escapeHTML(a.classNumber) || "No 2nd period on file"}</span>
+      </div>
+      <p class="text-xs text-[var(--slate)] mt-0.5">${escapeHTML(a.email) || "No email on file"}</p>
+      <div class="grid sm:grid-cols-2 gap-2 mt-3">
+        <div>
+          <label class="text-[10px] font-semibold uppercase tracking-wider text-[var(--slate)]">Struggles with most</label>
+          <input data-id="${a.id}" data-field="struggles" class="freshmanProfileInput w-full rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-sm mt-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30" value="${escapeHTML(a.struggles)}" placeholder="e.g. Time management">
+        </div>
+        <div>
+          <label class="text-[10px] font-semibold uppercase tracking-wider text-[var(--slate)]">Favorite subject</label>
+          <input data-id="${a.id}" data-field="favoriteSubject" class="freshmanProfileInput w-full rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-sm mt-0.5 focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30" value="${escapeHTML(a.favoriteSubject)}" placeholder="e.g. Art">
+        </div>
+      </div>
+      <div class="flex items-center gap-2 mt-2">
+        <button data-id="${a.id}" class="saveFreshmanProfile text-xs font-semibold text-[var(--royal)]">Save</button>
+        <span data-id="${a.id}" class="savedNote hidden text-xs text-[var(--academic)]">Saved ✓</span>
+      </div>
+    </div>`).join("");
+
+  document.querySelectorAll(".saveFreshmanProfile").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const id = btn.dataset.id;
+      const struggles = document.querySelector(`.freshmanProfileInput[data-id="${id}"][data-field="struggles"]`).value.trim();
+      const favoriteSubject = document.querySelector(`.freshmanProfileInput[data-id="${id}"][data-field="favoriteSubject"]`).value.trim();
+      const list = getAssignments().map(a => a.id === id ? { ...a, struggles, favoriteSubject } : a);
+      saveAssignments(list);
+      const note = document.querySelector(`.savedNote[data-id="${id}"]`);
+      note.classList.remove("hidden");
+      setTimeout(() => note.classList.add("hidden"), 2000);
+    });
+  });
+}
+
+/* =========================================================================
+   GROUP CHAT
+   ========================================================================= */
+const chatToggle = document.getElementById("chatToggle");
+const chatPanel = document.getElementById("chatPanel");
+const chatWidgetWrap = document.getElementById("chatWidgetWrap");
+const navShowChat = document.getElementById("navShowChat");
+const CHAT_HIDDEN_KEY = "linkcrew_chat_widget_hidden";
+
+function setChatWidgetHidden(hidden){
+  localStorage.setItem(CHAT_HIDDEN_KEY, hidden ? "1" : "0");
+  chatWidgetWrap.classList.toggle("hidden", hidden);
+  navShowChat.classList.toggle("hidden", !hidden);
+  if(hidden) chatPanel.classList.add("hidden");
+}
+
+document.getElementById("chatHide").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setChatWidgetHidden(true);
+});
+navShowChat.addEventListener("click", () => setChatWidgetHidden(false));
+setChatWidgetHidden(localStorage.getItem(CHAT_HIDDEN_KEY) === "1");
+
+chatToggle.addEventListener("click", () => {
+  chatPanel.classList.toggle("hidden");
+  if(!chatPanel.classList.contains("hidden")) renderChat();
+});
+document.getElementById("chatClose").addEventListener("click", () => chatPanel.classList.add("hidden"));
+
+function refreshChatAccess(){
+  const inputRow = document.getElementById("chatInputRow");
+  const lockedNote = document.getElementById("chatLockedNote");
+  const nameField = document.getElementById("chatName");
+  if(identity){
+    inputRow.classList.remove("hidden");
+    lockedNote.classList.add("hidden");
+    nameField.value = identity.fullName;
+    nameField.disabled = true;
+  } else if(adminUnlocked){
+    inputRow.classList.remove("hidden");
+    lockedNote.classList.add("hidden");
+    nameField.disabled = false;
+    const savedAdminName = localStorage.getItem(ADMIN_NAME_KEY);
+    if(savedAdminName) nameField.value = savedAdminName;
+  } else {
+    inputRow.classList.add("hidden");
+    lockedNote.classList.remove("hidden");
+  }
+}
+
+function renderChat(){
+  const list = getChat();
+  const el = document.getElementById("chatMessages");
+  if(list.length === 0){
+    el.innerHTML = `<p class="text-xs text-[var(--slate)] text-center py-4">No messages yet — say hi to your fellow leaders!</p>`;
+    return;
+  }
+  el.innerHTML = list.map(m => {
+    const d = new Date(m.date);
+    const time = d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+    return `<div class="bg-[var(--cream)] rounded-lg px-3 py-2">
+      <p><span class="font-semibold text-[var(--navy)]">${escapeHTML(m.name)}</span> <span class="font-mono text-[10px] text-[var(--slate)]">${time}</span></p>
+      <p class="text-[var(--ink)]">${escapeHTML(m.message)}</p>
+    </div>`;
+  }).join("");
+  el.scrollTop = el.scrollHeight;
+}
+
+document.getElementById("chatSend").addEventListener("click", sendChat);
+document.getElementById("chatMsg").addEventListener("keydown", e => { if(e.key === "Enter") sendChat(); });
+
+function sendChat(){
+  const name = document.getElementById("chatName").value.trim();
+  const message = document.getElementById("chatMsg").value.trim();
+  if(!name || !message) return;
+  if(!identity && adminUnlocked) localStorage.setItem(ADMIN_NAME_KEY, name);
+  const list = getChat();
+  list.push({ id: crypto.randomUUID(), name, message, date: new Date().toISOString() });
+  saveChat(list);
+  document.getElementById("chatMsg").value = "";
+  renderChat();
+}
+
+/* =========================================================================
+   UPDATE NOTIFICATION
+   ========================================================================= */
+function checkForUpdate(){
+  const lastSeen = localStorage.getItem(LAST_SEEN_VERSION_KEY);
+  if(lastSeen && lastSeen !== APP_VERSION){
+    document.getElementById("updateToastNote").textContent = APP_UPDATE_NOTE;
+    document.getElementById("updateToast").classList.remove("hidden");
+  }
+  localStorage.setItem(LAST_SEEN_VERSION_KEY, APP_VERSION);
+}
+document.getElementById("updateToastClose").addEventListener("click", () => {
+  document.getElementById("updateToast").classList.add("hidden");
+});
+
+/* =========================================================================
+   INIT
+   ========================================================================= */
+populateLeaderSelect();
+applyIdentityUI();
+renderAnnouncements();
+renderAssignments();
+refreshChatAccess();
+checkForUpdate();
+</script>
+</body>
+</html>
