@@ -118,28 +118,18 @@
   <!-- ============ LEADER VIEW ============ -->
   <section id="view-leader">
 
-    <!-- LOGIN GATE (username only) -->
+    <!-- LOGIN GATE (just your full name) -->
     <div id="leaderLoginGate" class="max-w-sm mx-auto bg-white rounded-2xl border border-[var(--line)] shadow-sm p-7 mt-6 text-center">
       <div class="w-11 h-11 rounded-full bg-[var(--navy)] text-white flex items-center justify-center mx-auto mb-3 text-lg">🐻</div>
       <h2 class="font-display text-lg font-semibold text-[var(--navy)]">Leader sign-in</h2>
-      <p class="text-xs text-[var(--slate)] mt-1 mb-4">Sign in once on this device. You'll only see your own check-ins.</p>
-      <input id="loginUsername" type="text" placeholder="Username" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+      <p class="text-xs text-[var(--slate)] mt-1 mb-4">Enter your full name to start checking in freshmen.</p>
+      <input id="loginFullName" type="text" placeholder="Your full name" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
       <button id="loginSubmit" class="w-full bg-[var(--navy)] text-white font-semibold py-2.5 rounded-lg text-sm mt-4">Sign In</button>
-      <p id="loginError" class="hidden text-xs text-[var(--social)] mt-2">Please enter a username.</p>
+      <p id="loginError" class="hidden text-xs text-[var(--social)] mt-2">Please enter your full name.</p>
+      <button id="loginCancelBtn" class="hidden text-xs text-[var(--slate)] underline mt-3">Cancel</button>
     </div>
 
-    <!-- NAME CAPTURE (shown once, the first time a signed-in user opens the check-in form) -->
-    <div id="nameCaptureGate" class="hidden max-w-sm mx-auto bg-white rounded-2xl border border-[var(--line)] shadow-sm p-7 mt-6 text-center">
-      <div class="w-11 h-11 rounded-full bg-[var(--navy)] text-white flex items-center justify-center mx-auto mb-3 text-lg">🐻</div>
-      <h2 class="font-display text-lg font-semibold text-[var(--navy)]">Quick — what's your name?</h2>
-      <p class="text-xs text-[var(--slate)] mt-1 mb-4">This is what shows up on your check-ins. Just once — we'll remember it.</p>
-      <input id="nameCaptureName" type="text" placeholder="Your full name" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
-      <button id="nameCaptureSubmit" class="w-full bg-[var(--navy)] text-white font-semibold py-2.5 rounded-lg text-sm mt-4">Continue</button>
-      <p id="nameCaptureError" class="hidden text-xs text-[var(--social)] mt-2">Please enter your name.</p>
-      <button id="nameCaptureLogoutBtn" class="text-xs text-[var(--slate)] underline mt-3">Not you? Log out</button>
-    </div>
-
-    <!-- LEADER CONTENT (shown once signed in + name captured) -->
+    <!-- LEADER CONTENT (shown once signed in) -->
     <div id="leaderContent" class="hidden">
       <div class="mb-6 flex items-start justify-between flex-wrap gap-2">
         <div>
@@ -162,8 +152,8 @@
               <span class="font-mono text-xs bg-[var(--navy)] text-white w-5 h-5 rounded flex items-center justify-center">1</span>
               Freshman
             </label>
-            <select id="freshmanSelect" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30 mb-2"></select>
-            <input id="freshmanOther" type="text" placeholder="Type freshman's name" class="hidden w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+            <div id="freshmanQuickPicks" class="hidden flex flex-wrap gap-1.5 mb-2"></div>
+            <input required id="freshmanName" type="text" placeholder="Type the freshman's name" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
           </div>
 
           <div class="grid sm:grid-cols-2 gap-4">
@@ -303,6 +293,12 @@
       </div>
 
       <div id="adminContactsPanel" class="hidden">
+        <div class="bg-white rounded-2xl border border-[var(--line)] shadow-sm p-5 sm:p-6 mb-6">
+          <p class="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--royal)] font-display mb-3">Link Crew Roster</p>
+          <div id="leaderRosterList" class="flex flex-wrap gap-2"></div>
+          <p id="leaderRosterEmpty" class="hidden text-sm text-[var(--slate)]">No leaders yet — they'll appear here once they sign in, or add one below when assigning a freshman.</p>
+        </div>
+
         <p class="text-sm text-[var(--slate)] mb-4">Assign freshmen to leaders. A leader can appear more than once if they have multiple freshmen. Click a freshman's name to see their check-in history.</p>
 
         <form id="assignForm" class="bg-white rounded-2xl border border-[var(--line)] shadow-sm p-5 sm:p-6 space-y-3 mb-6">
@@ -392,8 +388,8 @@
    ========================================================================= */
 /* Bump APP_VERSION (and update APP_UPDATE_NOTE) every time you ship changes.
    Returning visitors on this same page/link will see a one-time "updated!" toast. */
-const APP_VERSION = "2026-07-08.1";
-const APP_UPDATE_NOTE = "Check-ins can now be edited or deleted, on both the leader and teacher side.";
+const APP_VERSION = "2026-07-08.3";
+const APP_UPDATE_NOTE = "Teachers can now remove a leader from the roster in the Contacts tab.";
 const LAST_SEEN_VERSION_KEY = "linkcrew_last_seen_version";
 
 const CHECKINS_KEY = "linkcrew_checkins";
@@ -417,13 +413,26 @@ function saveAssignments(list){ localStorage.setItem(ASSIGNMENTS_KEY, JSON.strin
 
 function getLeaders(){ return JSON.parse(localStorage.getItem(LEADERS_KEY) || "[]"); }
 function saveLeaders(list){ localStorage.setItem(LEADERS_KEY, JSON.stringify(list)); }
-function registerLeader(fullName, leaderClass){
+
+// Adds a leader to the roster if they're new, keyed by name (case-insensitive).
+function upsertLeader(fullName, leaderClass){
   const list = getLeaders();
   const key = fullName.trim().toLowerCase();
-  if(!list.some(l => l.fullName.trim().toLowerCase() === key)){
-    list.push({ fullName: fullName.trim(), leaderClass });
-    saveLeaders(list);
+  const existing = list.find(l => l.fullName.trim().toLowerCase() === key);
+  if(existing){
+    if(leaderClass) existing.leaderClass = leaderClass;
+  } else {
+    list.push({ fullName: fullName.trim(), leaderClass: leaderClass || "" });
   }
+  saveLeaders(list);
+}
+
+// If a leader corrects their name, carry that change through their past check-ins/assignments/roster entry.
+function renameLeaderEverywhere(oldFullName, newFullName){
+  const oldKey = oldFullName.trim().toLowerCase();
+  saveAllCheckins(getCheckins().map(c => c.leader.trim().toLowerCase() === oldKey ? { ...c, leader: newFullName } : c));
+  saveAssignments(getAssignments().map(a => a.leader.trim().toLowerCase() === oldKey ? { ...a, leader: newFullName } : a));
+  saveLeaders(getLeaders().map(l => l.fullName.trim().toLowerCase() === oldKey ? { ...l, fullName: newFullName } : l));
 }
 
 function getIdentity(){ return JSON.parse(localStorage.getItem(IDENTITY_KEY) || "null"); }
@@ -486,6 +495,7 @@ adminSubContacts.onclick = () => {
   document.getElementById("adminContactsPanel").classList.remove("hidden");
   document.getElementById("adminCheckinsPanel").classList.add("hidden");
   renderAssignments();
+  renderLeaderRoster();
 };
 
 /* =========================================================================
@@ -501,6 +511,7 @@ function unlockEverything(){
   if(savedAdminName) document.getElementById("announceName").value = savedAdminName;
   renderAdmin();
   renderAssignments();
+  renderLeaderRoster();
   populateLeaderSelect();
   renderAnnouncements();
   refreshAnnouncementVisibility();
@@ -521,26 +532,22 @@ function refreshAnnouncementVisibility(){
   document.getElementById("announcementSection").classList.toggle("hidden", !shouldShow);
 }
 
+let editingName = false;
+
 function applyIdentityUI(){
   const loginGate = document.getElementById("leaderLoginGate");
-  const nameGate = document.getElementById("nameCaptureGate");
   const content = document.getElementById("leaderContent");
 
-  if(!identity){
+  if(!identity || editingName){
     loginGate.classList.remove("hidden");
-    nameGate.classList.add("hidden");
     content.classList.add("hidden");
-  } else if(!identity.fullName){
-    // signed in with a username, but hasn't given their name yet
-    loginGate.classList.add("hidden");
-    nameGate.classList.remove("hidden");
-    content.classList.add("hidden");
+    document.getElementById("loginCancelBtn").classList.toggle("hidden", !identity);
+    if(editingName) document.getElementById("loginFullName").value = identity.fullName;
   } else {
     loginGate.classList.add("hidden");
-    nameGate.classList.add("hidden");
     content.classList.remove("hidden");
     document.getElementById("loggedInName").textContent = identity.fullName;
-    populateFreshmanSelect();
+    renderFreshmanQuickPicks();
     renderRecent();
     renderAssignedFreshmen();
   }
@@ -548,45 +555,43 @@ function applyIdentityUI(){
   refreshChatAccess();
 }
 
-document.getElementById("loginSubmit").addEventListener("click", () => {
-  const username = document.getElementById("loginUsername").value.trim();
-  if(!username){ document.getElementById("loginError").classList.remove("hidden"); return; }
-  document.getElementById("loginError").classList.add("hidden");
-  identity = { username };
+function signInAs(fullName){
+  const previousName = identity ? identity.fullName : null;
+  identity = { fullName };
   saveIdentity(identity);
-  applyIdentityUI();
-});
-document.getElementById("loginUsername").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("loginSubmit").click(); });
-
-document.getElementById("nameCaptureSubmit").addEventListener("click", () => {
-  const fullName = document.getElementById("nameCaptureName").value.trim();
-  if(!fullName){ document.getElementById("nameCaptureError").classList.remove("hidden"); return; }
-  document.getElementById("nameCaptureError").classList.add("hidden");
-  identity = { ...identity, fullName };
-  saveIdentity(identity);
-  registerLeader(identity.fullName);
+  if(previousName && previousName.trim().toLowerCase() !== fullName.trim().toLowerCase()){
+    renameLeaderEverywhere(previousName, fullName);
+  }
+  upsertLeader(fullName);
   populateLeaderSelect();
+  editingName = false;
+  applyIdentityUI();
+}
+
+document.getElementById("loginSubmit").addEventListener("click", () => {
+  const fullName = document.getElementById("loginFullName").value.trim();
+  if(!fullName){ document.getElementById("loginError").classList.remove("hidden"); return; }
+  document.getElementById("loginError").classList.add("hidden");
+  signInAs(fullName);
+});
+document.getElementById("loginFullName").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("loginSubmit").click(); });
+
+document.getElementById("loginCancelBtn").addEventListener("click", () => {
+  editingName = false;
+  document.getElementById("loginError").classList.add("hidden");
   applyIdentityUI();
 });
-document.getElementById("nameCaptureName").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("nameCaptureSubmit").click(); });
 
 document.getElementById("editNameBtn").addEventListener("click", () => {
-  document.getElementById("nameCaptureName").value = identity.fullName || "";
-  identity = { username: identity.username }; // temporarily clear name so the gate shows
+  editingName = true;
   applyIdentityUI();
 });
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
   clearIdentity();
   identity = null;
-  document.getElementById("loginUsername").value = "";
-  applyIdentityUI();
-});
-
-document.getElementById("nameCaptureLogoutBtn").addEventListener("click", () => {
-  clearIdentity();
-  identity = null;
-  document.getElementById("loginUsername").value = "";
+  editingName = false;
+  document.getElementById("loginFullName").value = "";
   applyIdentityUI();
 });
 
@@ -636,25 +641,19 @@ document.getElementById("announceSubmit").addEventListener("click", () => {
 document.getElementById("announceMsg").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("announceSubmit").click(); });
 
 /* =========================================================================
-   FRESHMAN SELECT (populated from this leader's assignments)
+   FRESHMAN QUICK-PICKS (optional shortcuts from this leader's assignments; typing is always allowed)
    ========================================================================= */
-function populateFreshmanSelect(){
+function renderFreshmanQuickPicks(){
   if(!identity) return;
-  const sel = document.getElementById("freshmanSelect");
+  const wrap = document.getElementById("freshmanQuickPicks");
   const mine = getAssignments().filter(a => a.leader.trim().toLowerCase() === identity.fullName.trim().toLowerCase());
-  const options = mine.map(a => `<option value="${escapeHTML(a.freshman)}">${escapeHTML(a.freshman)}</option>`).join("");
-  sel.innerHTML = options + `<option value="__other__">Someone else / not listed</option>`;
-  sel.value = mine.length ? mine[0].freshman : "__other__";
-  toggleFreshmanOther();
+  if(mine.length === 0){ wrap.classList.add("hidden"); wrap.innerHTML = ""; return; }
+  wrap.classList.remove("hidden");
+  wrap.innerHTML = mine.map(a => `<button type="button" data-name="${escapeHTML(a.freshman)}" class="freshmanQuickPickBtn text-xs font-semibold px-2.5 py-1 rounded-full bg-[var(--cream)] border border-[var(--line)] text-[var(--navy)] hover:bg-[var(--silver)]">${escapeHTML(a.freshman)}</button>`).join("");
+  document.querySelectorAll(".freshmanQuickPickBtn").forEach(btn => {
+    btn.addEventListener("click", () => { document.getElementById("freshmanName").value = btn.dataset.name; });
+  });
 }
-
-function toggleFreshmanOther(){
-  const sel = document.getElementById("freshmanSelect");
-  const other = document.getElementById("freshmanOther");
-  if(sel.value === "__other__"){ other.classList.remove("hidden"); other.required = true; }
-  else { other.classList.add("hidden"); other.required = false; other.value = ""; }
-}
-document.getElementById("freshmanSelect").addEventListener("change", toggleFreshmanOther);
 
 /* =========================================================================
    CHECK-IN FORM
@@ -666,8 +665,7 @@ let checkinEditingId = null;
 document.getElementById("checkinForm").addEventListener("submit", (e) => {
   e.preventDefault();
   if(!identity) return;
-  const sel = document.getElementById("freshmanSelect");
-  const freshman = sel.value === "__other__" ? document.getElementById("freshmanOther").value.trim() : sel.value;
+  const freshman = document.getElementById("freshmanName").value.trim();
   if(!freshman) return;
 
   const fields = {
@@ -689,7 +687,7 @@ document.getElementById("checkinForm").addEventListener("submit", (e) => {
       ...fields,
       date: new Date().toISOString()
     });
-    document.getElementById("notes").value = "";
+    document.getElementById("checkinForm").reset();
     document.getElementById("checkinDate").value = new Date().toISOString().slice(0,10);
   }
 
@@ -706,13 +704,7 @@ function startCheckinEdit(id){
   if(!entry) return;
   checkinEditingId = id;
 
-  const sel = document.getElementById("freshmanSelect");
-  const hasOption = [...sel.options].some(o => o.value === entry.freshman);
-  if(hasOption){ sel.value = entry.freshman; }
-  else { sel.value = "__other__"; }
-  toggleFreshmanOther();
-  if(!hasOption) document.getElementById("freshmanOther").value = entry.freshman;
-
+  document.getElementById("freshmanName").value = entry.freshman || "";
   document.getElementById("checkinDate").value = entry.checkinDate || new Date().toISOString().slice(0,10);
   document.getElementById("quarter").value = entry.quarter || "Q1";
   document.getElementById("notes").value = entry.notes || "";
@@ -726,7 +718,6 @@ function cancelCheckinEdit(){
   checkinEditingId = null;
   document.getElementById("checkinForm").reset();
   document.getElementById("checkinDate").value = new Date().toISOString().slice(0,10);
-  populateFreshmanSelect();
   document.querySelector("#checkinForm button[type=submit]").textContent = "Submit Check-In";
   document.getElementById("cancelCheckinEditBtn").classList.add("hidden");
 }
@@ -932,6 +923,30 @@ function csvEscape(val){
 /* =========================================================================
    CONTACTS — LEADER SELECT + ASSIGNMENTS
    ========================================================================= */
+function renderLeaderRoster(){
+  const leaders = getLeaders();
+  const list = document.getElementById("leaderRosterList");
+  const empty = document.getElementById("leaderRosterEmpty");
+  if(leaders.length === 0){ list.innerHTML = ""; empty.classList.remove("hidden"); return; }
+  empty.classList.add("hidden");
+
+  list.innerHTML = leaders.map(l => `
+    <span class="flex items-center gap-1.5 text-xs font-semibold pl-3 pr-1.5 py-1.5 rounded-full bg-[var(--cream)] border border-[var(--line)] text-[var(--navy)]">
+      ${escapeHTML(l.fullName)}${l.leaderClass ? ` (${escapeHTML(l.leaderClass)})` : ""}
+      <button data-name="${escapeHTML(l.fullName)}" class="removeLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--social)] hover:bg-white" title="Remove leader">✕</button>
+    </span>`).join("");
+
+  document.querySelectorAll(".removeLeaderBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      if(!confirm(`Remove ${btn.dataset.name} from the roster? Their past check-ins and assignments will stay, they just won't be selectable anymore.`)) return;
+      const key = btn.dataset.name.trim().toLowerCase();
+      saveLeaders(getLeaders().filter(l => l.fullName.trim().toLowerCase() !== key));
+      renderLeaderRoster();
+      populateLeaderSelect();
+    });
+  });
+}
+
 function populateLeaderSelect(){
   const sel = document.getElementById("aLeaderSelect");
   const current = sel.value;
@@ -952,7 +967,7 @@ document.getElementById("assignForm").addEventListener("submit", (e) => {
     const newName = document.getElementById("aLeaderNewName").value.trim();
     const newClass = document.getElementById("aLeaderNewClass").value;
     if(!newName) return;
-    registerLeader(newName, newClass);
+    upsertLeader(newName, newClass);
     leader = newName;
     populateLeaderSelect();
   }
@@ -971,7 +986,7 @@ document.getElementById("assignForm").addEventListener("submit", (e) => {
   saveAssignments(list);
   resetAssignForm();
   renderAssignments();
-  populateFreshmanSelect();
+  renderFreshmanQuickPicks();
   renderAssignedFreshmen();
 });
 
@@ -1056,7 +1071,7 @@ function renderAssignments(){
       if(!confirm("Remove this assignment?")) return;
       saveAssignments(getAssignments().filter(a => a.id !== btn.dataset.id));
       renderAssignments();
-      populateFreshmanSelect();
+      renderFreshmanQuickPicks();
       renderAssignedFreshmen();
     });
   });
