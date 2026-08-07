@@ -119,15 +119,14 @@
   <!-- ============ LEADER VIEW ============ -->
   <section id="view-leader">
 
-    <!-- LOGIN GATE (just your full name) -->
+    <!-- LOGIN GATE (username, set up by your teacher) -->
     <div id="leaderLoginGate" class="max-w-sm mx-auto bg-white rounded-2xl border border-[var(--line)] shadow-sm p-7 mt-6 text-center">
       <div class="w-11 h-11 rounded-full bg-[var(--navy)] text-white flex items-center justify-center mx-auto mb-3 text-lg">🐻</div>
       <h2 class="font-display text-lg font-semibold text-[var(--navy)]">Leader sign-in</h2>
-      <p class="text-xs text-[var(--slate)] mt-1 mb-4">Enter your full name to start checking in freshmen.</p>
-      <input id="loginFullName" type="text" placeholder="Your full name" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+      <p class="text-xs text-[var(--slate)] mt-1 mb-4">Enter the username your teacher gave you.</p>
+      <input id="loginUsername" type="text" placeholder="Username" class="w-full rounded-lg border border-[var(--line)] px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
       <button id="loginSubmit" class="w-full bg-[var(--navy)] text-white font-semibold py-2.5 rounded-lg text-sm mt-4">Sign In</button>
-      <p id="loginError" class="hidden text-xs text-[var(--social)] mt-2">Please enter your full name.</p>
-      <button id="loginCancelBtn" class="hidden text-xs text-[var(--slate)] underline mt-3">Cancel</button>
+      <p id="loginError" class="hidden text-xs text-[var(--social)] mt-2">Username not recognized — ask your teacher to add you on the Admin side.</p>
     </div>
 
     <!-- LEADER CONTENT (shown once signed in) -->
@@ -136,7 +135,7 @@
         <div>
           <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--royal)] font-display">Roster Check-In</p>
           <h1 class="font-display text-2xl sm:text-3xl font-semibold text-[var(--navy)] mt-1">Log a freshman check-in</h1>
-          <p class="text-sm text-[var(--slate)] mt-1">Checking in as <span id="loggedInName" class="font-semibold text-[var(--navy)]"></span> · <button id="editNameBtn" class="underline text-[var(--royal)]">Edit</button> · <button id="logoutBtn" class="underline text-[var(--royal)]">Log out</button></p>
+          <p class="text-sm text-[var(--slate)] mt-1">Checking in as <span id="loggedInName" class="font-semibold text-[var(--navy)]"></span> · <button id="logoutBtn" class="underline text-[var(--royal)]">Log out</button></p>
         </div>
       </div>
 
@@ -296,8 +295,24 @@
       <div id="adminContactsPanel" class="hidden">
         <div class="bg-white rounded-2xl border border-[var(--line)] shadow-sm p-5 sm:p-6 mb-6">
           <p class="text-xs font-semibold uppercase tracking-[0.15em] text-[var(--royal)] font-display mb-3">Link Crew Roster</p>
+          <p class="text-xs text-[var(--slate)] mb-3">Add each leader here with a username — that's what they'll type to sign in, no email needed.</p>
+          <form id="rosterForm" class="grid sm:grid-cols-4 gap-3 mb-4">
+            <input required id="rUsername" type="text" placeholder="Username" class="rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+            <input required id="rFullName" type="text" placeholder="Full name" class="rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+            <select id="rClass" class="rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
+              <option value="">Class (optional)</option>
+              <option value="Junior">Junior</option>
+              <option value="Senior">Senior</option>
+            </select>
+            <button type="submit" id="rosterSubmitBtn" class="bg-[var(--navy)] text-white font-semibold text-sm rounded-lg hover:bg-[var(--navy-2)]">Add Leader</button>
+            <input type="hidden" id="rEditingUsername" value="">
+            <p id="rosterError" class="hidden sm:col-span-4 text-xs text-[var(--social)]">That username is already taken.</p>
+            <p id="rosterCancelWrap" class="hidden sm:col-span-4 -mt-1">
+              <button type="button" id="rosterCancelBtn" class="text-xs text-[var(--slate)] underline">Cancel edit</button>
+            </p>
+          </form>
           <div id="leaderRosterList" class="flex flex-wrap gap-2"></div>
-          <p id="leaderRosterEmpty" class="hidden text-sm text-[var(--slate)]">No leaders yet — they'll appear here once they sign in, or add one below when assigning a freshman.</p>
+          <p id="leaderRosterEmpty" class="hidden text-sm text-[var(--slate)]">No leaders yet — add your first one above.</p>
         </div>
 
         <p class="text-sm text-[var(--slate)] mb-4">Assign freshmen to leaders. A leader can appear more than once if they have multiple freshmen. Click a freshman's name to see their check-in history.</p>
@@ -316,14 +331,6 @@
               <label class="text-xs font-semibold text-[var(--navy)] mb-1 block">2nd Period Class</label>
               <input required id="aClassNumber" type="text" placeholder="e.g. Mr. Diaz — Rm 204" class="w-full rounded-lg border border-[var(--line)] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
             </div>
-          </div>
-
-          <div id="aLeaderNewWrap" class="hidden grid sm:grid-cols-2 gap-3 bg-[var(--cream)] rounded-lg p-3">
-            <input id="aLeaderNewName" type="text" placeholder="New leader's full name" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
-            <select id="aLeaderNewClass" class="rounded-lg border border-[var(--line)] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--navy)]/30">
-              <option value="Junior">Junior</option>
-              <option value="Senior">Senior</option>
-            </select>
           </div>
 
           <div>
@@ -393,8 +400,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* Bump APP_VERSION (and update APP_UPDATE_NOTE) every time you ship changes.
    Returning visitors on this same page/link will see a one-time "updated!" toast. */
-const APP_VERSION = "2026-07-08.4";
-const APP_UPDATE_NOTE = "Check-ins, the roster, and announcements now sync live across every device.";
+const APP_VERSION = "2026-07-08.5";
+const APP_UPDATE_NOTE = "Leaders now sign in with a username the teacher sets up for them, no email required.";
 const LAST_SEEN_VERSION_KEY = "linkcrew_last_seen_version";
 
 const IDENTITY_KEY = "linkcrew_identity";     // this device's signed-in leader (stays local — it's just "who's using this device")
@@ -413,14 +420,14 @@ let chatCache = [];
 /* ---- row <-> app-object mapping (DB uses snake_case, app code uses camelCase) ---- */
 function rowToCheckin(r){ return { id:r.id, leader:r.leader, leaderClass:r.leader_class, freshman:r.freshman, checkinDate:r.checkin_date, quarter:r.quarter, notes:r.notes, date:r.logged_at }; }
 function rowToAssignment(r){ return { id:r.id, leader:r.leader, freshman:r.freshman, classNumber:r.class_number, email:r.email, struggles:r.struggles, favoriteSubject:r.favorite_subject }; }
-function rowToLeader(r){ return { fullName:r.full_name, leaderClass:r.leader_class }; }
+function rowToLeader(r){ return { username:r.username, fullName:r.full_name, leaderClass:r.leader_class }; }
 function rowToAnnouncement(r){ return { id:r.id, name:r.name, message:r.message, date:r.created_at }; }
 function rowToChat(r){ return { id:r.id, name:r.name, message:r.message, date:r.created_at }; }
 
 const TABLE_ROW_MAKERS = {
   checkins: o => ({ id:o.id, leader:o.leader, leader_class:o.leaderClass||null, freshman:o.freshman, checkin_date:o.checkinDate||null, quarter:o.quarter||null, notes:o.notes||null, logged_at:o.date }),
   assignments: o => ({ id:o.id, leader:o.leader, freshman:o.freshman, class_number:o.classNumber||null, email:o.email||null, struggles:o.struggles||null, favorite_subject:o.favoriteSubject||null }),
-  leaders: o => ({ full_name:o.fullName, leader_class:o.leaderClass||null }),
+  leaders: o => ({ full_name:o.fullName, leader_class:o.leaderClass||null, username:o.username||null }),
   announcements: o => ({ id:o.id, name:o.name, message:o.message, created_at:o.date }),
   chat_messages: o => ({ id:o.id, name:o.name, message:o.message, created_at:o.date })
 };
@@ -463,14 +470,19 @@ function saveAssignments(newList){ syncList("assignments", assignmentsCache, new
 function getLeaders(){ return leadersCache; }
 function saveLeaders(newList){ syncList("leaders", leadersCache, newList); leadersCache = newList; }
 
-// Adds a leader to the roster if they're new, keyed by name (case-insensitive).
-function upsertLeader(fullName, leaderClass){
+function getLeaderByUsername(username){
+  const key = (username||"").trim().toLowerCase();
+  return getLeaders().find(l => (l.username||"").trim().toLowerCase() === key);
+}
+
+// Adds a leader to the roster if their username is new, or updates them if it already exists.
+function upsertLeaderByUsername(username, fullName, leaderClass){
   const list = getLeaders();
-  const key = fullName.trim().toLowerCase();
-  const existing = list.find(l => l.fullName.trim().toLowerCase() === key);
+  const key = username.trim().toLowerCase();
+  const existing = list.find(l => (l.username||"").trim().toLowerCase() === key);
   const updated = existing
-    ? list.map(l => l === existing ? { ...l, leaderClass: leaderClass || l.leaderClass } : l)
-    : [...list, { fullName: fullName.trim(), leaderClass: leaderClass || "" }];
+    ? list.map(l => l === existing ? { ...l, fullName: fullName.trim(), leaderClass: leaderClass || l.leaderClass } : l)
+    : [...list, { username: username.trim(), fullName: fullName.trim(), leaderClass: leaderClass || "" }];
   saveLeaders(updated);
 }
 
@@ -643,17 +655,13 @@ function refreshAnnouncementVisibility(){
   document.getElementById("announcementSection").classList.toggle("hidden", !shouldShow);
 }
 
-let editingName = false;
-
 function applyIdentityUI(){
   const loginGate = document.getElementById("leaderLoginGate");
   const content = document.getElementById("leaderContent");
 
-  if(!identity || editingName){
+  if(!identity){
     loginGate.classList.remove("hidden");
     content.classList.add("hidden");
-    document.getElementById("loginCancelBtn").classList.toggle("hidden", !identity);
-    if(editingName) document.getElementById("loginFullName").value = identity.fullName;
   } else {
     loginGate.classList.add("hidden");
     content.classList.remove("hidden");
@@ -670,43 +678,22 @@ function applyIdentityUI(){
   refreshChatAccess();
 }
 
-function signInAs(fullName){
-  const previousName = identity ? identity.fullName : null;
-  identity = { fullName };
-  saveIdentity(identity);
-  if(previousName && previousName.trim().toLowerCase() !== fullName.trim().toLowerCase()){
-    renameLeaderEverywhere(previousName, fullName);
-  }
-  upsertLeader(fullName);
-  populateLeaderSelect();
-  editingName = false;
-  applyIdentityUI();
-}
-
 document.getElementById("loginSubmit").addEventListener("click", () => {
-  const fullName = document.getElementById("loginFullName").value.trim();
-  if(!fullName){ document.getElementById("loginError").classList.remove("hidden"); return; }
+  const username = document.getElementById("loginUsername").value.trim();
+  if(!username) return;
+  const match = getLeaderByUsername(username);
+  if(!match){ document.getElementById("loginError").classList.remove("hidden"); return; }
   document.getElementById("loginError").classList.add("hidden");
-  signInAs(fullName);
-});
-document.getElementById("loginFullName").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("loginSubmit").click(); });
-
-document.getElementById("loginCancelBtn").addEventListener("click", () => {
-  editingName = false;
-  document.getElementById("loginError").classList.add("hidden");
+  identity = { username: match.username, fullName: match.fullName, leaderClass: match.leaderClass };
+  saveIdentity(identity);
   applyIdentityUI();
 });
-
-document.getElementById("editNameBtn").addEventListener("click", () => {
-  editingName = true;
-  applyIdentityUI();
-});
+document.getElementById("loginUsername").addEventListener("keydown", e => { if(e.key === "Enter") document.getElementById("loginSubmit").click(); });
 
 document.getElementById("logoutBtn").addEventListener("click", () => {
   clearIdentity();
   identity = null;
-  editingName = false;
-  document.getElementById("loginFullName").value = "";
+  document.getElementById("loginUsername").value = "";
   applyIdentityUI();
 });
 
@@ -1038,6 +1025,43 @@ function csvEscape(val){
 /* =========================================================================
    CONTACTS — LEADER SELECT + ASSIGNMENTS
    ========================================================================= */
+let rosterEditingUsername = null;
+
+document.getElementById("rosterForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const username = document.getElementById("rUsername").value.trim();
+  const fullName = document.getElementById("rFullName").value.trim();
+  const leaderClass = document.getElementById("rClass").value;
+  if(!username || !fullName) return;
+
+  const clash = getLeaderByUsername(username);
+  if(clash && (!rosterEditingUsername || clash.username.toLowerCase() !== rosterEditingUsername.toLowerCase())){
+    document.getElementById("rosterError").classList.remove("hidden");
+    return;
+  }
+  document.getElementById("rosterError").classList.add("hidden");
+
+  if(rosterEditingUsername && rosterEditingUsername.toLowerCase() !== username.toLowerCase()){
+    // username itself changed — remove the old entry, then add the new one
+    saveLeaders(getLeaders().filter(l => l.username.toLowerCase() !== rosterEditingUsername.toLowerCase()));
+  }
+  upsertLeaderByUsername(username, fullName, leaderClass);
+  resetRosterForm();
+  renderLeaderRoster();
+  populateLeaderSelect();
+});
+
+document.getElementById("rosterCancelBtn").addEventListener("click", resetRosterForm);
+
+function resetRosterForm(){
+  document.getElementById("rosterForm").reset();
+  document.getElementById("rEditingUsername").value = "";
+  rosterEditingUsername = null;
+  document.getElementById("rosterSubmitBtn").textContent = "Add Leader";
+  document.getElementById("rosterCancelWrap").classList.add("hidden");
+  document.getElementById("rosterError").classList.add("hidden");
+}
+
 function renderLeaderRoster(){
   const leaders = getLeaders();
   const list = document.getElementById("leaderRosterList");
@@ -1047,15 +1071,29 @@ function renderLeaderRoster(){
 
   list.innerHTML = leaders.map(l => `
     <span class="flex items-center gap-1.5 text-xs font-semibold pl-3 pr-1.5 py-1.5 rounded-full bg-[var(--cream)] border border-[var(--line)] text-[var(--navy)]">
-      ${escapeHTML(l.fullName)}${l.leaderClass ? ` (${escapeHTML(l.leaderClass)})` : ""}
-      <button data-name="${escapeHTML(l.fullName)}" class="removeLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--social)] hover:bg-white" title="Remove leader">✕</button>
+      ${escapeHTML(l.fullName)} <span class="font-mono text-[var(--slate)] font-normal">@${escapeHTML(l.username)}</span>${l.leaderClass ? ` (${escapeHTML(l.leaderClass)})` : ""}
+      <button data-username="${escapeHTML(l.username)}" class="editLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--royal)] hover:bg-white" title="Edit leader">✎</button>
+      <button data-username="${escapeHTML(l.username)}" class="removeLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--social)] hover:bg-white" title="Remove leader">✕</button>
     </span>`).join("");
 
+  document.querySelectorAll(".editLeaderBtn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const l = getLeaderByUsername(btn.dataset.username);
+      if(!l) return;
+      document.getElementById("rUsername").value = l.username;
+      document.getElementById("rFullName").value = l.fullName;
+      document.getElementById("rClass").value = l.leaderClass || "";
+      rosterEditingUsername = l.username;
+      document.getElementById("rosterSubmitBtn").textContent = "Update Leader";
+      document.getElementById("rosterCancelWrap").classList.remove("hidden");
+      window.scrollTo({ top: document.getElementById("rosterForm").offsetTop - 20, behavior:"smooth" });
+    });
+  });
   document.querySelectorAll(".removeLeaderBtn").forEach(btn => {
     btn.addEventListener("click", () => {
-      if(!confirm(`Remove ${btn.dataset.name} from the roster? Their past check-ins and assignments will stay, they just won't be selectable anymore.`)) return;
-      const key = btn.dataset.name.trim().toLowerCase();
-      saveLeaders(getLeaders().filter(l => l.fullName.trim().toLowerCase() !== key));
+      if(!confirm(`Remove this leader from the roster? Their past check-ins and assignments will stay, they just won't be able to sign in anymore.`)) return;
+      const key = btn.dataset.username.trim().toLowerCase();
+      saveLeaders(getLeaders().filter(l => l.username.trim().toLowerCase() !== key));
       renderLeaderRoster();
       populateLeaderSelect();
     });
@@ -1066,26 +1104,16 @@ function populateLeaderSelect(){
   const sel = document.getElementById("aLeaderSelect");
   const current = sel.value;
   const leaders = getLeaders();
-  sel.innerHTML = leaders.map(l => `<option value="${escapeHTML(l.fullName)}">${escapeHTML(l.fullName)}${l.leaderClass ? ` (${l.leaderClass})` : ""}</option>`).join("")
-    + `<option value="__new__">+ Add a new leader…</option>`;
+  sel.innerHTML = leaders.length
+    ? leaders.map(l => `<option value="${escapeHTML(l.fullName)}">${escapeHTML(l.fullName)}${l.leaderClass ? ` (${l.leaderClass})` : ""}</option>`).join("")
+    : `<option value="">Add a leader above first</option>`;
   if(leaders.some(l => l.fullName === current)) sel.value = current;
 }
 
-document.getElementById("aLeaderSelect").addEventListener("change", (e) => {
-  document.getElementById("aLeaderNewWrap").classList.toggle("hidden", e.target.value !== "__new__");
-});
-
 document.getElementById("assignForm").addEventListener("submit", (e) => {
   e.preventDefault();
-  let leader = document.getElementById("aLeaderSelect").value;
-  if(leader === "__new__"){
-    const newName = document.getElementById("aLeaderNewName").value.trim();
-    const newClass = document.getElementById("aLeaderNewClass").value;
-    if(!newName) return;
-    upsertLeader(newName, newClass);
-    leader = newName;
-    populateLeaderSelect();
-  }
+  const leader = document.getElementById("aLeaderSelect").value;
+  if(!leader) return;
   const freshman = document.getElementById("aFreshman").value.trim();
   const classNumber = document.getElementById("aClassNumber").value.trim();
   const email = document.getElementById("aEmail").value.trim();
@@ -1112,7 +1140,6 @@ function resetAssignForm(){
   document.getElementById("aEditingId").value = "";
   document.getElementById("assignSubmitBtn").textContent = "Assign";
   document.getElementById("assignCancelBtn").classList.add("hidden");
-  document.getElementById("aLeaderNewWrap").classList.add("hidden");
   populateLeaderSelect();
 }
 
