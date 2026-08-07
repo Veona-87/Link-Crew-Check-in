@@ -400,8 +400,8 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 /* Bump APP_VERSION (and update APP_UPDATE_NOTE) every time you ship changes.
    Returning visitors on this same page/link will see a one-time "updated!" toast. */
-const APP_VERSION = "2026-07-08.5";
-const APP_UPDATE_NOTE = "Leaders now sign in with a username the teacher sets up for them, no email required.";
+const APP_VERSION = "2026-07-08.6";
+const APP_UPDATE_NOTE = "Fixed a crash when editing/deleting leaders added before usernames existed.";
 const LAST_SEEN_VERSION_KEY = "linkcrew_last_seen_version";
 
 const IDENTITY_KEY = "linkcrew_identity";     // this device's signed-in leader (stays local — it's just "who's using this device")
@@ -1027,6 +1027,8 @@ function csvEscape(val){
    ========================================================================= */
 let rosterEditingUsername = null;
 
+function safeUsername(l){ return (l && l.username ? l.username : "").trim(); }
+
 document.getElementById("rosterForm").addEventListener("submit", (e) => {
   e.preventDefault();
   const username = document.getElementById("rUsername").value.trim();
@@ -1035,15 +1037,15 @@ document.getElementById("rosterForm").addEventListener("submit", (e) => {
   if(!username || !fullName) return;
 
   const clash = getLeaderByUsername(username);
-  if(clash && (!rosterEditingUsername || clash.username.toLowerCase() !== rosterEditingUsername.toLowerCase())){
+  if(clash && (!rosterEditingUsername || safeUsername(clash).toLowerCase() !== rosterEditingUsername.toLowerCase())){
     document.getElementById("rosterError").classList.remove("hidden");
     return;
   }
   document.getElementById("rosterError").classList.add("hidden");
 
   if(rosterEditingUsername && rosterEditingUsername.toLowerCase() !== username.toLowerCase()){
-    // username itself changed — remove the old entry, then add the new one
-    saveLeaders(getLeaders().filter(l => l.username.toLowerCase() !== rosterEditingUsername.toLowerCase()));
+    // username itself changed (or was missing before) — remove the old entry, then add the new one
+    saveLeaders(getLeaders().filter(l => safeUsername(l).toLowerCase() !== rosterEditingUsername.toLowerCase()));
   }
   upsertLeaderByUsername(username, fullName, leaderClass);
   resetRosterForm();
@@ -1069,21 +1071,27 @@ function renderLeaderRoster(){
   if(leaders.length === 0){ list.innerHTML = ""; empty.classList.remove("hidden"); return; }
   empty.classList.add("hidden");
 
-  list.innerHTML = leaders.map(l => `
+  list.innerHTML = leaders.map(l => {
+    const uname = safeUsername(l);
+    const usernameTag = uname
+      ? `<span class="font-mono text-[var(--slate)] font-normal">@${escapeHTML(uname)}</span>`
+      : `<span class="text-[var(--social)] font-normal">(no username — click ✎ to set one)</span>`;
+    return `
     <span class="flex items-center gap-1.5 text-xs font-semibold pl-3 pr-1.5 py-1.5 rounded-full bg-[var(--cream)] border border-[var(--line)] text-[var(--navy)]">
-      ${escapeHTML(l.fullName)} <span class="font-mono text-[var(--slate)] font-normal">@${escapeHTML(l.username)}</span>${l.leaderClass ? ` (${escapeHTML(l.leaderClass)})` : ""}
-      <button data-username="${escapeHTML(l.username)}" class="editLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--royal)] hover:bg-white" title="Edit leader">✎</button>
-      <button data-username="${escapeHTML(l.username)}" class="removeLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--social)] hover:bg-white" title="Remove leader">✕</button>
-    </span>`).join("");
+      ${escapeHTML(l.fullName)} ${usernameTag}${l.leaderClass ? ` (${escapeHTML(l.leaderClass)})` : ""}
+      <button data-username="${escapeHTML(uname)}" data-fullname="${escapeHTML(l.fullName)}" class="editLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--royal)] hover:bg-white" title="Edit leader">✎</button>
+      <button data-username="${escapeHTML(uname)}" data-fullname="${escapeHTML(l.fullName)}" class="removeLeaderBtn w-5 h-5 rounded-full flex items-center justify-center text-[var(--social)] hover:bg-white" title="Remove leader">✕</button>
+    </span>`;
+  }).join("");
 
   document.querySelectorAll(".editLeaderBtn").forEach(btn => {
     btn.addEventListener("click", () => {
-      const l = getLeaderByUsername(btn.dataset.username);
+      const l = getLeaders().find(x => safeUsername(x) === btn.dataset.username && x.fullName === btn.dataset.fullname);
       if(!l) return;
-      document.getElementById("rUsername").value = l.username;
+      document.getElementById("rUsername").value = safeUsername(l);
       document.getElementById("rFullName").value = l.fullName;
       document.getElementById("rClass").value = l.leaderClass || "";
-      rosterEditingUsername = l.username;
+      rosterEditingUsername = safeUsername(l);
       document.getElementById("rosterSubmitBtn").textContent = "Update Leader";
       document.getElementById("rosterCancelWrap").classList.remove("hidden");
       window.scrollTo({ top: document.getElementById("rosterForm").offsetTop - 20, behavior:"smooth" });
@@ -1092,8 +1100,7 @@ function renderLeaderRoster(){
   document.querySelectorAll(".removeLeaderBtn").forEach(btn => {
     btn.addEventListener("click", () => {
       if(!confirm(`Remove this leader from the roster? Their past check-ins and assignments will stay, they just won't be able to sign in anymore.`)) return;
-      const key = btn.dataset.username.trim().toLowerCase();
-      saveLeaders(getLeaders().filter(l => l.username.trim().toLowerCase() !== key));
+      saveLeaders(getLeaders().filter(l => !(safeUsername(l) === btn.dataset.username && l.fullName === btn.dataset.fullname)));
       renderLeaderRoster();
       populateLeaderSelect();
     });
