@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Link Crew">
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
@@ -384,47 +385,93 @@
 
 <script>
 /* =========================================================================
-   STORAGE KEYS
+   SUPABASE — shared database so every device sees the same data
    ========================================================================= */
+const SUPABASE_URL = "https://ctnrjnoqlhetoukbyhex.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0bnJqbm9xbGhldG91a2J5aGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5Nzk2NzIsImV4cCI6MjEwMTU1NTY3Mn0.Rxc_-bgdKFw5VovarTq9HpDPE3icO3-AeI7ZRMIBEmU";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 /* Bump APP_VERSION (and update APP_UPDATE_NOTE) every time you ship changes.
    Returning visitors on this same page/link will see a one-time "updated!" toast. */
-const APP_VERSION = "2026-07-08.3";
-const APP_UPDATE_NOTE = "Teachers can now remove a leader from the roster in the Contacts tab.";
+const APP_VERSION = "2026-07-08.4";
+const APP_UPDATE_NOTE = "Check-ins, the roster, and announcements now sync live across every device.";
 const LAST_SEEN_VERSION_KEY = "linkcrew_last_seen_version";
 
-const CHECKINS_KEY = "linkcrew_checkins";
-const ANNOUNCEMENTS_KEY = "linkcrew_announcements";
-const ASSIGNMENTS_KEY = "linkcrew_assignments";
-const LEADERS_KEY = "linkcrew_leaders";       // registry: [{fullName, leaderClass}]
-const IDENTITY_KEY = "linkcrew_identity";     // this device's signed-in leader
-const CHAT_KEY = "linkcrew_groupchat";
+const IDENTITY_KEY = "linkcrew_identity";     // this device's signed-in leader (stays local — it's just "who's using this device")
 const ADMIN_NAME_KEY = "linkcrew_admin_name";
 const ADMIN_PIN = "link crew"; // <-- change this to update the teacher PIN
 
-function getCheckins(){ return JSON.parse(localStorage.getItem(CHECKINS_KEY) || "[]"); }
-function saveCheckin(entry){ const all = getCheckins(); all.unshift(entry); localStorage.setItem(CHECKINS_KEY, JSON.stringify(all)); }
-function saveAllCheckins(list){ localStorage.setItem(CHECKINS_KEY, JSON.stringify(list)); }
+function escapeHTML(str){ const div = document.createElement("div"); div.textContent = str ?? ""; return div.innerHTML; }
 
-function getAnnouncements(){ return JSON.parse(localStorage.getItem(ANNOUNCEMENTS_KEY) || "[]"); }
-function saveAnnouncements(list){ localStorage.setItem(ANNOUNCEMENTS_KEY, JSON.stringify(list)); }
+/* ---- in-memory caches, kept in sync with Supabase via initial load + realtime ---- */
+let checkinsCache = [];
+let assignmentsCache = [];
+let leadersCache = [];
+let announcementsCache = [];
+let chatCache = [];
 
-function getAssignments(){ return JSON.parse(localStorage.getItem(ASSIGNMENTS_KEY) || "[]"); }
-function saveAssignments(list){ localStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(list)); }
+/* ---- row <-> app-object mapping (DB uses snake_case, app code uses camelCase) ---- */
+function rowToCheckin(r){ return { id:r.id, leader:r.leader, leaderClass:r.leader_class, freshman:r.freshman, checkinDate:r.checkin_date, quarter:r.quarter, notes:r.notes, date:r.logged_at }; }
+function rowToAssignment(r){ return { id:r.id, leader:r.leader, freshman:r.freshman, classNumber:r.class_number, email:r.email, struggles:r.struggles, favoriteSubject:r.favorite_subject }; }
+function rowToLeader(r){ return { fullName:r.full_name, leaderClass:r.leader_class }; }
+function rowToAnnouncement(r){ return { id:r.id, name:r.name, message:r.message, date:r.created_at }; }
+function rowToChat(r){ return { id:r.id, name:r.name, message:r.message, date:r.created_at }; }
 
-function getLeaders(){ return JSON.parse(localStorage.getItem(LEADERS_KEY) || "[]"); }
-function saveLeaders(list){ localStorage.setItem(LEADERS_KEY, JSON.stringify(list)); }
+const TABLE_ROW_MAKERS = {
+  checkins: o => ({ id:o.id, leader:o.leader, leader_class:o.leaderClass||null, freshman:o.freshman, checkin_date:o.checkinDate||null, quarter:o.quarter||null, notes:o.notes||null, logged_at:o.date }),
+  assignments: o => ({ id:o.id, leader:o.leader, freshman:o.freshman, class_number:o.classNumber||null, email:o.email||null, struggles:o.struggles||null, favorite_subject:o.favoriteSubject||null }),
+  leaders: o => ({ full_name:o.fullName, leader_class:o.leaderClass||null }),
+  announcements: o => ({ id:o.id, name:o.name, message:o.message, created_at:o.date }),
+  chat_messages: o => ({ id:o.id, name:o.name, message:o.message, created_at:o.date })
+};
+const TABLE_ID_KEY = { checkins:"id", assignments:"id", leaders:"full_name", announcements:"id", chat_messages:"id" };
+const TABLE_OBJ_KEY = { checkins:"id", assignments:"id", leaders:"fullName", announcements:"id", chat_messages:"id" };
+
+// Diffs an old cached list against a new one and pushes just the changes to Supabase.
+// This lets every call site keep working the same way it always did ("give me the whole
+// new list"), while only the actual differences go over the network.
+function syncList(table, oldList, newList){
+  const objKey = TABLE_OBJ_KEY[table];
+  const dbKey = TABLE_ID_KEY[table];
+  const newKeys = new Set(newList.map(o => o[objKey]));
+  oldList.filter(o => !newKeys.has(o[objKey])).forEach(o => {
+    sb.from(table).delete().eq(dbKey, o[objKey]).then(({error}) => { if(error) console.error(table, "delete", error); });
+  });
+  newList.forEach(o => {
+    const old = oldList.find(x => x[objKey] === o[objKey]);
+    if(!old){
+      sb.from(table).insert(TABLE_ROW_MAKERS[table](o)).then(({error}) => { if(error) console.error(table, "insert", error); });
+    } else if(JSON.stringify(old) !== JSON.stringify(o)){
+      sb.from(table).update(TABLE_ROW_MAKERS[table](o)).eq(dbKey, o[objKey]).then(({error}) => { if(error) console.error(table, "update", error); });
+    }
+  });
+}
+
+function getCheckins(){ return checkinsCache; }
+function saveCheckin(entry){
+  checkinsCache = [entry, ...checkinsCache];
+  sb.from("checkins").insert(TABLE_ROW_MAKERS.checkins(entry)).then(({error}) => { if(error) console.error("checkins insert", error); });
+}
+function saveAllCheckins(newList){ syncList("checkins", checkinsCache, newList); checkinsCache = newList; }
+
+function getAnnouncements(){ return announcementsCache; }
+function saveAnnouncements(newList){ syncList("announcements", announcementsCache, newList); announcementsCache = newList; }
+
+function getAssignments(){ return assignmentsCache; }
+function saveAssignments(newList){ syncList("assignments", assignmentsCache, newList); assignmentsCache = newList; }
+
+function getLeaders(){ return leadersCache; }
+function saveLeaders(newList){ syncList("leaders", leadersCache, newList); leadersCache = newList; }
 
 // Adds a leader to the roster if they're new, keyed by name (case-insensitive).
 function upsertLeader(fullName, leaderClass){
   const list = getLeaders();
   const key = fullName.trim().toLowerCase();
   const existing = list.find(l => l.fullName.trim().toLowerCase() === key);
-  if(existing){
-    if(leaderClass) existing.leaderClass = leaderClass;
-  } else {
-    list.push({ fullName: fullName.trim(), leaderClass: leaderClass || "" });
-  }
-  saveLeaders(list);
+  const updated = existing
+    ? list.map(l => l === existing ? { ...l, leaderClass: leaderClass || l.leaderClass } : l)
+    : [...list, { fullName: fullName.trim(), leaderClass: leaderClass || "" }];
+  saveLeaders(updated);
 }
 
 // If a leader corrects their name, carry that change through their past check-ins/assignments/roster entry.
@@ -439,10 +486,72 @@ function getIdentity(){ return JSON.parse(localStorage.getItem(IDENTITY_KEY) || 
 function saveIdentity(identity){ localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity)); }
 function clearIdentity(){ localStorage.removeItem(IDENTITY_KEY); }
 
-function getChat(){ return JSON.parse(localStorage.getItem(CHAT_KEY) || "[]"); }
-function saveChat(list){ localStorage.setItem(CHAT_KEY, JSON.stringify(list)); }
+function getChat(){ return chatCache; }
+function saveChat(newList){ syncList("chat_messages", chatCache, newList); chatCache = newList; }
 
-function escapeHTML(str){ const div = document.createElement("div"); div.textContent = str ?? ""; return div.innerHTML; }
+/* ---- initial load from Supabase, plus realtime subscriptions for live sync ---- */
+async function initialLoad(){
+  const [ci, as, ld, an, ch] = await Promise.all([
+    sb.from("checkins").select("*").order("logged_at", { ascending:false }),
+    sb.from("assignments").select("*"),
+    sb.from("leaders").select("*"),
+    sb.from("announcements").select("*").order("created_at", { ascending:false }),
+    sb.from("chat_messages").select("*").order("created_at", { ascending:true })
+  ]);
+  checkinsCache = (ci.data || []).map(rowToCheckin);
+  assignmentsCache = (as.data || []).map(rowToAssignment);
+  leadersCache = (ld.data || []).map(rowToLeader);
+  announcementsCache = (an.data || []).map(rowToAnnouncement);
+  chatCache = (ch.data || []).map(rowToChat);
+  renderEverything();
+}
+
+function renderEverything(){
+  populateLeaderSelect();
+  applyIdentityUI();
+  renderAnnouncements();
+  renderAssignments();
+  renderLeaderRoster();
+  refreshChatAccess();
+  if(!document.getElementById("chatPanel").classList.contains("hidden")) renderChat();
+  if(adminUnlocked) renderAdmin();
+}
+
+sb.channel("public:checkins")
+  .on("postgres_changes", { event:"*", schema:"public", table:"checkins" }, async () => {
+    const { data } = await sb.from("checkins").select("*").order("logged_at", { ascending:false });
+    checkinsCache = (data || []).map(rowToCheckin);
+    renderRecent();
+    renderAssignedFreshmen();
+    if(adminUnlocked) renderAdmin();
+  })
+  .subscribe();
+
+sb.channel("public:announcements")
+  .on("postgres_changes", { event:"*", schema:"public", table:"announcements" }, async () => {
+    const { data } = await sb.from("announcements").select("*").order("created_at", { ascending:false });
+    announcementsCache = (data || []).map(rowToAnnouncement);
+    renderAnnouncements();
+  })
+  .subscribe();
+
+sb.channel("public:chat_messages")
+  .on("postgres_changes", { event:"*", schema:"public", table:"chat_messages" }, async () => {
+    const { data } = await sb.from("chat_messages").select("*").order("created_at", { ascending:true });
+    chatCache = (data || []).map(rowToChat);
+    if(!document.getElementById("chatPanel").classList.contains("hidden")) renderChat();
+  })
+  .subscribe();
+
+async function refetchAssignmentsAndLeaders(){
+  const [as, ld] = await Promise.all([
+    sb.from("assignments").select("*"),
+    sb.from("leaders").select("*")
+  ]);
+  assignmentsCache = (as.data || []).map(rowToAssignment);
+  leadersCache = (ld.data || []).map(rowToLeader);
+}
+
 
 const quarterLabels = { Q1:"1st Quarter", Q2:"2nd Quarter", Q3:"3rd Quarter", Q4:"4th Quarter" };
 const quarterColors = { Q1:"var(--navy)", Q2:"var(--royal)", Q3:"var(--academic)", Q4:"var(--social)" };
@@ -496,6 +605,7 @@ adminSubContacts.onclick = () => {
   document.getElementById("adminCheckinsPanel").classList.add("hidden");
   renderAssignments();
   renderLeaderRoster();
+  refetchAssignmentsAndLeaders().then(() => { renderAssignments(); renderLeaderRoster(); populateLeaderSelect(); });
 };
 
 /* =========================================================================
@@ -516,6 +626,7 @@ function unlockEverything(){
   renderAnnouncements();
   refreshAnnouncementVisibility();
   refreshChatAccess();
+  refetchAssignmentsAndLeaders().then(() => { renderAssignments(); renderLeaderRoster(); populateLeaderSelect(); });
 }
 
 document.getElementById("pinSubmit").addEventListener("click", () => {
@@ -550,6 +661,10 @@ function applyIdentityUI(){
     renderFreshmanQuickPicks();
     renderRecent();
     renderAssignedFreshmen();
+    refetchAssignmentsAndLeaders().then(() => {
+      renderFreshmanQuickPicks();
+      renderAssignedFreshmen();
+    });
   }
   refreshAnnouncementVisibility();
   refreshChatAccess();
@@ -1228,11 +1343,7 @@ document.getElementById("updateToastClose").addEventListener("click", () => {
 /* =========================================================================
    INIT
    ========================================================================= */
-populateLeaderSelect();
-applyIdentityUI();
-renderAnnouncements();
-renderAssignments();
-refreshChatAccess();
+initialLoad();
 checkForUpdate();
 
 if("serviceWorker" in navigator){
